@@ -1,0 +1,344 @@
+---
+title: "HBN Demographics"
+output: html_notebook
+---
+
+Below follows the preprocessing of the HBN demographics data. We ultimately want:
+
+-   Age
+-   Sex
+-   Race
+-   Education
+-   Handedness
+-   Parent's education
+-   BMI
+
+```{r}
+library(tidyverse)
+library(naniar)
+library(ggsankey)
+library(forcats)
+library(here)
+
+data_path <- here("data")
+```
+
+# Read in
+
+```{r, cache=TRUE}
+hbn_raw <- read_csv(here(data_path, "HBNdata_2020_12_03.csv")) %>%
+  slice(-1) %>%
+  rename("participant_id" = Identifiers) %>%
+  mutate(participant_id = str_remove(participant_id, ",assessment")) %>%
+  mutate(participant_id = str_c("sub-", participant_id))
+
+hbn_lei <- read_csv(here(data_path, "hbn_demo_from_lei.csv")) %>%
+  mutate(participant_id = subject) %>%
+  rename(sex_old = sex)
+```
+
+```{r}
+hbn_raw %>%
+  sample_n(30)
+```
+
+Let's grab the first relevant variables
+
+# Age
+
+```{r}
+hbn_ <- hbn_raw %>%
+  mutate(age = as.numeric(`Basic_Demos,Age`))
+```
+
+```{r}
+qplot(hbn_$age)
+```
+
+# Sex
+
+```{r}
+sex_levels <- c("Male", "Female", "Other")
+hbn_ <- hbn_ %>%
+  mutate(sex = case_when(
+    `Basic_Demos,Sex` == "0"    ~ "Male",
+    `Basic_Demos,Sex` == "1"    ~ "Female",
+    TRUE                        ~ "Other"
+  ) %>% factor(levels = sex_levels))
+```
+
+```{r}
+qplot(hbn_$sex)
+```
+
+# Race
+
+```{r}
+hbn_ %>%
+  select(race) %>%
+  table()
+```
+
+Only want: black, white, asian, mixed, other, unknown, hispanic
+
+```{r}
+hbn_ <- hbn_ %>%
+  mutate(race_old = case_when(
+    `PreInt_Demos_Fam,Child_Race` == "0"  ~ "White/Caucasian",
+    `PreInt_Demos_Fam,Child_Race` == "1"  ~ "Black/African American",
+    `PreInt_Demos_Fam,Child_Race` == "2"  ~ "Hispanic",
+    `PreInt_Demos_Fam,Child_Race` == "3"  ~ "Asian",
+    `PreInt_Demos_Fam,Child_Race` == "4"  ~ "Indian",
+    `PreInt_Demos_Fam,Child_Race` == "5"  ~ "Native American Indian",
+    `PreInt_Demos_Fam,Child_Race` == "6"  ~ "American Indian/Alaskan Native",
+    `PreInt_Demos_Fam,Child_Race` == "7"  ~ "Native Hawaiian/Other Pacific Islander",
+    `PreInt_Demos_Fam,Child_Race` == "8"  ~ "Two or more races",
+    `PreInt_Demos_Fam,Child_Race` == "9"  ~ "Other race",
+    `PreInt_Demos_Fam,Child_Race` == "10" ~ "Unknown",
+    `PreInt_Demos_Fam,Child_Race` == "11" ~ "Other",
+  ) %>% factor()
+)
+#0= White/Caucasian
+#1= Black/African American
+#8= Two or more races
+#5= Native American Indian
+#6= American Indian/Alaskan Native
+#7= Native Hawaiian/Other Pacific Islander
+#3= Asian
+#9= Other race
+#2= Hispanic
+#4= Indian
+#10= Unknown
+
+```
+
+```{r}
+race_levels <- c("Black", "White", "Asian", "Mixed", "Hispanic", "Other", "Unknown")
+  
+hbn_ <- hbn_ %>%
+  mutate(
+    race = case_when(
+    race_old == "White/Caucasian"                   ~ "White",
+    race_old == "Black/African American"            ~ "Black",
+    race_old == "Hispanic"                          ~ "Hispanic",
+    race_old == "Asian"                             ~ "Asian",
+    race_old == "Indian"                            ~ "Asian",
+    race_old == "Native American Indian"            ~ "Other",
+    race_old == "American Indian/Alaskan Native"    ~ "Other",
+    race_old == "American Indian/Alaskan Native"    ~ "Other",
+    race_old == "Two or more races"                 ~ "Mixed",
+    str_detect(race_old, "Other")                   ~ "Other",
+    race_old == "Unknown"                           ~ "Unknown"
+  ) %>% factor(levels = race_levels))
+```
+
+```{r}
+hbn_ %>%
+  ggplot(aes(x=race)) +
+  geom_bar()
+```
+
+```{r}
+hbn_ %>%
+  ggsankey::make_long(race_old, race) %>%
+  ggplot(aes(x = x,
+             next_x = next_x,
+             node = node,
+             next_node = next_node,
+             fill = factor(node),
+             label = node)) +
+  theme_bw() +
+  geom_sankey(node.colour = "black", show.legend = FALSE) +
+  geom_sankey_label(size = 2, color = "black", fill= "white", hjust = -0.5, check_overlap=TRUE) +
+  theme(legend.position = "none") +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank()) +
+  labs(title = "Old name -> New name for race categories")
+```
+
+# Education
+
+We have the following input for education:
+
+```{r}
+hbn_ <- hbn_ %>%
+  mutate(education_years=as.numeric(`PreInt_EduHx,yrs_school`))
+```
+
+```{r}
+hbn_$education_years %>%
+  table()
+```
+
+```{r}
+hbn_ %>%
+  ggplot(aes(x=education_years)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle=45, hjust = 1))
+```
+
+# Parent Education
+
+
+```{r}
+hbn_ %>%
+  left_join(hbn_lei) %>%
+  mutate(education_f = Father_Edu, education_m = Mother_Edu) -> hbn_
+
+hbn_ %>%
+  select(education_f, education_m) %>%
+  pivot_longer(c(education_f, education_m), names_to = c("parent"), values_to = c("years")) %>%
+  ggplot(aes(x=years)) +
+  geom_bar(aes(fill=parent), position="dodge")
+```
+
+# Handedness
+
+```{r}
+hbn_$Handedness %>%
+  qplot()
+```
+
+Most folks are right handed:
+
+```{r}
+hbn_ %>%
+  mutate(handedness = case_when(
+    Handedness == 1 ~ "Right",
+    Handedness == 2 ~ "Left"
+    ) %>% factor()
+  ) -> hbn_
+```
+
+```{r}
+hbn_$handedness %>%
+  qplot()
+```
+
+# BMI
+
+We use the [CDC formula for BMI](https://www.cdc.gov/nccdphp/dnpao/growthcharts/training/bmiage/page5_2.html):
+
+$ \frac{ \text{weight} (lb)} { \text{height} (in)^2 \times 703}$ 
+
+```{r}
+# we get height in inches from vtl007 in the data dictionary
+hbn_ <- hbn_ %>%
+  mutate(bmi = as.numeric(`Physical,BMI`))
+```
+
+```{r}
+hbn_ %>%
+  ggplot(aes(x=bmi)) +
+  geom_histogram()
+```
+
+# Summary
+
+```{r}
+hbn_final <- hbn_ %>%
+  mutate(wave = 1,
+         study = "HBN" %>% factor(),
+  ) %>%
+  select(participant_id, study, study_site, wave, age, sex, race, bmi, handedness, education_years, education_f, education_m)
+```
+
+```{r}
+gg_miss_var(hbn_final, show_pct = TRUE)
+```
+# Outputs
+
+We write the output to RDS as well as the data dictionary.
+
+```{r}
+hbn_final %>%
+  write_rds(here("outputs", "hbn_data.rds"))
+```
+
+```{r}
+age <- list(
+  LongName = "ParticipantAge",
+  Description = "Participant age in years at the time of scan/intake. If original data is collected in months, the final value is divided by 12.",
+  Units = "Years"
+)
+
+race <- list(
+  LongName = "ParticipantRace",
+  Description = "Participant's race.",
+  Levels = levels(hbn_final$race)
+)
+
+sex <- list(
+  LongName = "ParticipantSex",
+  Description = "Participant's sex.",
+  Levels = levels(hbn_final$sex)
+)
+
+bmi <- list(
+  LongName = "ParticipantBMI",
+  Description = "Participant's Body Mass Index. ",
+  TermURL = "https://www.cdc.gov/nccdphp/dnpao/growthcharts/training/bmiage/page5_2.html",
+  Units = "lbs/inches^2; BMI is normally reported without units."
+)
+
+handedness <- list(
+  LongName = "ParticipantHandedness",
+  Description = "Participant handedness. Either self-reported, or result of binarizing the Edinburgh Handedness Scale. Participants whose Edinburgh Handedness Scale value is 0 are reported as Ambidextrous",
+  Levels = levels(hbn_final$handedness),
+  TermURL = "https://en.wikipedia.org/wiki/Edinburgh_Handedness_Inventory"
+)
+
+education_years <- list(
+  LongName = "ParticipantEducation",
+  Description = "Participant education in years at time of scan/intake."
+)
+
+education_f <- list(
+  LongName = "FatherEducation",
+  Description = "Father's education level at time of scan/intake.",
+  Levels = levels(hbn_final$education_f)
+)
+
+education_m <- list(
+  LongName = "MotherEducation",
+  Description = "Mother's education level at time of scan/intake.",
+  Levels = levels(hbn_final$education_m)
+)
+
+wave <- list(
+  LongName = "ParticipantWave",
+  Description = "Participant's recruitment wave.",
+  Levels = levels(hbn_final$wave)
+)
+
+study_site <- list(
+  LongName = "ParticipantStudySite",
+  Description = "Participant's study recruitment site.",
+  Levels = levels(hbn_final$study_site)
+)
+
+study <- list(
+  LongName = "ParticipantStudy",
+  Description = "Participant's study.",
+  Levels = levels(hbn_final$study)
+)
+
+list(age=age, 
+     race=race, 
+     sex=sex, 
+     bmi=bmi, 
+     handedness=handedness, 
+     education_years=education_years, 
+     education_f=education_f, 
+     education_m=education_m, 
+     wave=wave, 
+     study_site=study_site, 
+     study=study) %>%
+  #jsonlite::toJSON(auto_unbox = TRUE) %>%
+  #jsonlite::prettify() %>%
+  jsonlite::write_json(here("outputs", "hbn_dictionary.json"), auto_unbox=TRUE, pretty=TRUE)
+```
+
