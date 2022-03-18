@@ -1,0 +1,669 @@
+---
+title: "Completeness Map of Demographics Data"
+output: 
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_depth: 4
+    toc_float: true
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+library(naniar)
+library(here)
+
+data_path <- here("data")
+```
+
+```{r, warning=FALSE, message=FALSE, include=FALSE}
+subjfilters <- fs::dir_ls(here("data", "sub_lists"))
+ids <- subjfilters %>% 
+  map_dfr(read_csv, .id = "source", col_names = c("participant_id")) %>%
+  mutate(dataset = str_extract(source, "[a-z]+(?=_subj_list\\.csv)"))
+```
+
+In this notebook we will investigate the completeness of demographic data in the RBC datasets. We'll be basing this off of the notebook at `r here("notebooks", "RBC_PFactor_processing.Rmd")` from the Brazil team.
+
+# HBN Processing
+<!-- HBN -->
+
+```{r, cache=TRUE, include=FALSE}
+hbn_raw <- read_csv(here(data_path, "HBNdata_2020_12_03.csv")) %>%
+  slice(-1) %>%
+  rename("participant_id" = Identifiers) %>%
+  mutate(participant_id = str_remove(participant_id, ",assessment")) %>%
+  mutate(participant_id = str_c("sub-", participant_id))
+```
+
+
+```{r, warning=FALSE}
+hbn_ <- hbn_raw %>%
+  rename("age" = `Basic_Demos,Age`)
+hbn_ <- hbn_ %>% 
+  mutate(age = as.numeric(age)) %>%
+  mutate(age_group = 
+           case_when(
+             age>=5 & age<11 ~ "5_to_10", 
+             age>=11& age<15 ~ "11_to_14",
+             age>=15 ~ "15_or_higher"
+             )
+         ) %>%
+  mutate(age_group = ordered(age_group, 
+                             levels = c("5_to_10", "11_to_14", "15_or_higher")))
+```
+
+<!-- Gender -->
+
+```{r}
+hbn_ <- hbn_ %>%
+  rename(sex = `Basic_Demos,Sex`) %>%
+  mutate(sex = case_when(sex=="0" ~ "Male", 
+                            sex=="1" ~ "Female"
+                            ) %>% as.factor())
+```
+
+<!-- Study Site -->
+
+```{r}
+hbn_ <- hbn_ %>%
+  rename(study_site = `Basic_Demos,Study_Site`) %>%
+  mutate(study_site = case_when(study_site =="1" ~ "HBN-1",
+                                study_site =="2" ~ "HBN-2",
+                                study_site =="3" ~ "HBN-3",
+                                study_site =="4" ~ "HBN-4",
+                                study_site =="5" ~ "HBN-5"),
+         study = "HBN")
+```
+
+<!-- Race -->
+
+```{r, warning=FALSE}
+race_levels <- seq(0:11)
+race_labels <- c('White', 'Black', 'Mixed', 'Asian', 'Asian', 'Native', 'Native', 'Native', 'Mixed', 'Other', 'Unknown', 'Other')
+race_labels_old <- c("White/Caucasian", "Black/African American", "Hispanic", "Asian", "Indian", "Native American Indian", "American Indian/Alaskan Native", "Native Hawaiian/Other Pacific Islander", "Two or More Races", "Unknown", "Other", "Other")
+
+hbn_ <- hbn_ %>%
+  #rename(race=`PreInt_Demos_Fam,Child_Race`) %>%
+  mutate(race = factor(as.numeric(`PreInt_Demos_Fam,Child_Race`), levels=race_levels, labels=race_labels))
+#0= White/Caucasian
+#1= Black/African American
+#2= Hispanic
+#3= Asian
+#4= Indian
+#5= Native American Indian
+#6= American Indian/Alaskan Native
+#7= Native Hawaiian/Other Pacific Islander
+#8= Two or more races
+#9= Other race
+#10= Unknown
+
+# "0='White';1='Black'; 2='Mixed';3='Asian';4='Asian'; 5='Native'; 6='Native'; 7='Native'; 8='Mixed'; 9='Other'; 10='Unknown'; 11='Other'"
+```
+
+<!-- BMI -->
+
+
+```{r, warning=FALSE}
+hbn_ <- hbn_ %>%
+  mutate(bmi=as.numeric(`Physical,BMI`))
+```
+
+
+<!-- Education -->
+```{r, warning=FALSE}
+hbn_ <- hbn_ %>%
+  mutate(education_years=as.numeric(`PreInt_EduHx,yrs_school`))
+```
+
+
+```{r}
+
+```
+
+
+<!--END HBN-->
+
+# NKI Processing
+
+```{r, cache=TRUE, include=FALSE}
+ # NKI
+nki_raw1 <- read_csv(here(data_path, "RocklandSample_04JAN2021.csv")) %>%
+  rename("participant_id" = Identifiers) %>%
+  separate(participant_id, c("participant_id", "wave"))
+
+nki_raw2 <- read_csv(here(data_path, "RocklandSample_01SET2021_cog.csv")) %>%
+  rename("participant_id" = Identifiers) %>%
+  separate(participant_id, c("participant_id", "wave"))
+
+```
+
+```{r, warning=FALSE}
+nki_wave_levels <- c(1, 1, 1, 2, 3, 3)
+nki_wave_labels <- c('BAS1', 'BAS2', 'BAS3', 'FLU1', 'FLU2', 'FLU3')
+
+nki_ <- left_join(nki_raw1, nki_raw2, by=c("participant_id", "wave")) %>%
+  mutate(participant_id = str_c("sub-", participant_id))
+nki_ <- nki_ %>%
+  mutate(
+    wave = case_when(
+      wave == "BAS1"    ~ 1,
+      wave == "BAS2"    ~ 1,
+      wave == "BAS3"    ~ 1,
+      wave == "FLU1"    ~ 2,
+      wave == "FLU2"    ~ 3,
+      wave == "FLU3"    ~ 3
+      ) %>% factor(levels = nki_wave_levels, labels =nki_wave_labels)
+    )
+
+```
+
+```{r, warning=FALSE}
+nki_race_old_levels <- c(1:6)
+nki_race_old_labels <- c("American Indian or Native Alaskan", "Asian", "Black  or African American", "Native Hawiian or Other Pacific Islander", "White", "Other")
+
+nki_ <- nki_ %>%
+  
+  # study data
+  mutate(study = "NKI",
+         study_site = "NKI-1",
+         selection = "Community"
+  ) %>%
+  
+  # age as above
+  rename(age = nkicbcl_128) %>%
+  mutate(age = as.numeric(age),
+         age_group = 
+           case_when(
+             age>=5 & age<11 ~ "5_to_10", 
+             age>=11& age<15 ~ "11_to_14",
+             age>=15 ~ "15_or_higher"
+             )
+         ) %>%
+  mutate(age_group = ordered(age_group, 
+                             levels = c("5_to_10", "11_to_14", "15_or_higher"))) %>%
+  
+  # gender as above
+  mutate(sex = 
+           case_when(
+             nkicbcl_127=="1" ~ "Male",
+             nkicbcl_127=="2"~ "Female")
+         ) %>%
+  
+  # race as above
+  mutate(race_old = factor(dem_004, labels = nki_race_old_labels, levels = nki_race_old_levels),
+         race = 
+           case_when(
+             dem_004 == 1    ~ "Native",
+             dem_004 == 2    ~ "Asian",
+             dem_004 == 3    ~ "Black",
+             dem_004 == 4    ~ "Native",
+             dem_004 == 5    ~ "White",
+             dem_004 == 6    ~ "Other"
+           ) %>% factor()
+         ) %>%
+  
+#NKI_data <- NKI_data %>% mutate(Child_race=car::recode(Child_race,"5='White';3='Black'; 2='Asian'; 1='Native'; 4='Native'; 6='Other'"))
+#1= American Indian or Native Alaskan
+#2= Asian
+#3= Black  or African American
+#4= Native Hawiian or Other Pacific Islander
+#5= White
+#6= Other Race
+  
+  # Education
+  mutate(education_years = as.numeric(sesc_10))
+```
+
+# PNC Processing
+<!-- PNC -->
+
+```{r, message=FALSE, warning=FALSE}
+pnc_raw1 <- read_csv(here("data", "pnc_data.csv")) %>% 
+  rename(participant_id=bblid)
+pnc_raw2 <- read_csv(here("data", "bblid_renamed.csv")) %>%
+      rename(participant_id=reid)
+pnc_data <- pnc_raw1  %>%
+  left_join(
+    pnc_raw2
+    ) %>%
+  mutate(participant_id = str_c("sub-", participant_id))
+```
+
+```{r}
+pnc_ <- pnc_data %>%
+  rename(wave=timepoint) %>%
+  mutate(study = "PNC",
+         selection = "Community",
+         study_site = "PNC-1") %>%
+  mutate(sex = 
+           case_when(sex=="1" ~ "Male", sex=="2"~ "Female") %>% as.factor()
+         ) %>%
+  mutate(
+    age = as.numeric(ageAtClinicalAssess1)/12,
+    age_group = 
+      case_when(
+        age>=5 & age<11 ~ "5_to_10", 
+        age>=11& age<15 ~ "11_to_14",
+        age>=15 ~ "15_or_higher"
+        )
+    ) %>%
+  mutate(age_group = ordered(age_group, 
+                             levels = c("5_to_10", "11_to_14", "15_or_higher"))) %>%
+  mutate(education_years = edu1) %>%
+  
+  #PNC_data <- PNC_data %>% mutate(Child_race=car::recode(Child_race,"1='White'; 2='Black'; 3='Native'; 5='Mixed'; 4='Asian'; 6='Native'"))
+  mutate(race = factor(race,
+                       levels = seq(1:6),
+                       labels = c("White", "Black", "Native", "Mixed", "Asian", "Native")
+                       )
+         ) %>%
+  mutate(study = "PNC") %>%
+  mutate(father_edu = fedu1, mother_edu = medu1, handedness = handednessv2)
+
+```
+
+
+<!-- END PNC-->
+
+# HRC Processing
+
+```{r, cache=TRUE, warning=FALSE}
+# HRC
+BHRC_data <- readRDS(here("data", "BHRC_2020_11_05.rds"))
+
+# correction to include site, gender and skincolor in all waves and filter for only those with responses at follow-ups
+mydata_w0 <- BHRC_data %>% dplyr::filter(redcap_event_name=="wave0_arm_1", dcany!="NA")
+mydata_w1 <- BHRC_data %>% dplyr::filter(redcap_event_name=="wave1_arm_1", dcany!="NA")
+mydata_w2 <- BHRC_data %>% dplyr::filter(redcap_event_name=="wave2_arm_1", dcany!="NA") %>% dplyr::select(-state, -gender, -skincolor)
+mydata_complement <- BHRC_data %>% dplyr::filter(redcap_event_name=="wave0_arm_1") %>% dplyr::select(ident, state, gender, skincolor)
+mydata_w2 <- left_join(mydata_w2,mydata_complement, by="ident") 
+BHRC_data <- rbind(mydata_w0, mydata_w1, mydata_w2)
+
+BHRC_data<-dplyr::rename(BHRC_data,EID=ident); BHRC_data$EID<-as.character(BHRC_data$EID)
+BHRC_data$Study<-"BHRC"
+BHRC_data<-BHRC_data %>% mutate(selection = case_when(selection==1 ~ "Community", 
+                                       selection==2 ~ "High_risk"))
+BHRC_data<-BHRC_data %>% mutate(wave = case_when(redcap_event_name=="wave0_arm_1" ~ 1, 
+                                       redcap_event_name=="wave1_arm_1" ~ 2,
+                                       redcap_event_name=="wave2_arm_1" ~ 3))
+#BHRC_data<-BHRC_data %>% mutate(Site = case_when(state=="Rio Grande do Sul" ~ "BHRC-1", state=="São Paulo"~ "BHRC-2"))
+BHRC_data<-BHRC_data %>% mutate(Site = case_when(state=="1" ~ "BHRC-1", state=="2"~ "BHRC-2"))
+#BHRC_data<-BHRC_data %>% mutate(Gender = case_when(gender=="Female" ~ 1, gender=="Male"~ 2))
+BHRC_data<-BHRC_data %>% mutate(sex = case_when(gender=="1" ~ "Male", gender=="2"~ "Female"))
+BHRC_data$gender <- as.factor(BHRC_data$sex)
+BHRC_data<-dplyr::rename(BHRC_data,Age=nage)
+BHRC_data<-BHRC_data %>% mutate(Age_group_3cat = case_when(Age>=5 & Age<11 ~ "5_to_10", 
+                                                      Age>=11& Age<15 ~ "11_to_14",
+                                                      Age>=15 ~ "15_or_higher"))
+BHRC_data$Age_group_3cat <- ordered(BHRC_data$Age_group_3cat, levels = c("5_to_10", "11_to_14", "15_or_higher")) 
+
+BHRC_data$Child_race <- BHRC_data$skincolor
+#BHRC_data <- BHRC_data %>% mutate(Child_race=car::recode(Child_race,"1='White';2='Black'; 3='Mixed';5='Asian'; 4='Native'"))
+
+#education
+BHRC_data_w0 <- BHRC_data %>% dplyr::filter(wave==1)
+BHRC_data_w1 <- BHRC_data %>% dplyr::filter(wave==2)
+BHRC_data_w2 <- BHRC_data %>% dplyr::filter(wave==3)
+
+BHRC_data_w0 <- BHRC_data_w0 %>% mutate(School_repet= 
+                case_when(fat24==1 ~ 1,
+                          fat24==0 ~ 0,
+                          fat24==99 ~ NA_real_))
+BHRC_data_w0 <- BHRC_data_w0 %>% mutate(School_exp= 
+                case_when(fat25==1|fat26==1 ~ 1,
+                          fat25==0 & fat26==0 ~ 0,
+                          fat25==99 ~ NA_real_))
+BHRC_data_w0 <- BHRC_data_w0 %>% mutate(School_susp= 
+                case_when(fat27==1 ~ 1,
+                          fat27==0 ~ 0,
+                          fat27==99 ~ NA_real_))
+
+BHRC_data_w1 <- BHRC_data_w1 %>% mutate(School_repet= 
+                case_when(le4_unite==1 ~ 1,
+                          le4_unite==0 ~ 0,
+                          le4_unite==99 ~ NA_real_))
+BHRC_data_w1 <- BHRC_data_w1 %>% mutate(School_exp= 
+                case_when(le5_unite==1|le7_unite==1|instlevel==13 ~ 1,
+                          le5_unite==0 & le7_unite==0 & instlevel!=13 ~ 0,
+                          le5_unite==99 & le7_unite==99 ~ NA_real_))
+BHRC_data_w1 <- BHRC_data_w1 %>% mutate(School_susp= 
+                case_when(le6_unite==1 ~ 1,
+                          le6_unite==0 ~ 0,
+                          le6_unite==99 ~ NA_real_))
+
+BHRC_data_w2 <- BHRC_data_w2 %>% mutate(School_repet= 
+                case_when(le4_unite==1 ~ 1,
+                          le4_unite==0 ~ 0,
+                          le4_unite==99 ~ NA_real_))
+BHRC_data_w2 <- BHRC_data_w2 %>% mutate(School_exp= 
+                case_when(le5_unite==1|le7_unite==1 ~ 1,
+                          le5_unite==0 & le7_unite==0 ~ 0,
+                          le5_unite==99 & le7_unite==99 ~ NA_real_))
+BHRC_data_w2 <- BHRC_data_w2 %>% mutate(School_susp= 
+                case_when(le6_unite==1 ~ 1,
+                          le6_unite==0 ~ 0,
+                          le6_unite==99 ~ NA_real_))
+
+BHRC_data <- rbind(BHRC_data_w0, BHRC_data_w1, BHRC_data_w2)
+rm(BHRC_data_w0, BHRC_data_w1, BHRC_data_w2)
+
+BHRC_data<-dplyr::rename(BHRC_data,School_years=instlevel)
+# summary.factor(BHRC_data$School_years)
+# get_labels(BHRC_data$School_years)
+# BHRC_data <- BHRC_data %>% mutate(School_years=car::recode(School_years,"13=NA"))
+```
+
+
+```{r}
+bhrc_race_levels <- seq(1:5)
+bhrc_race_labels <- c("White", "Black", "Mixed", "Native", "Asian")
+bhrc_ <- BHRC_data %>%
+  mutate(race = factor(Child_race, levels=bhrc_race_levels, labels=bhrc_race_labels))
+
+bhrc_ <- bhrc_ %>%
+  rename(participant_id=subjectid, age=Age, age_group=Age_group_3cat, race=race, education_years=School_years, study=Study, study_site=Site, wave=wave, sex=sex) %>%
+  mutate(participant_id = str_c("sub-", participant_id))
+```
+
+
+# HCP-D
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+hcpd_raw <- read_csv(here("data", "hcpd_demographics.csv"))
+```
+
+```{r}
+hcpd_raw
+```
+
+
+
+
+
+
+# HBN Summary
+
+```{r, results='asis'}
+hbn_final <- hbn_ %>%
+  select(participant_id, age, sex, study, study_site, race, bmi, education_years) %>%
+  filter(participant_id %in% ids$participant_id)
+
+cat("Total subjects: ", length(unique(hbn_final$participant_id)))
+cat("\n")
+cat("Current Variables:\n")
+cat(paste0("- ", colnames(hbn_final)), sep="\n")
+```
+
+```{r}
+hbn_final %>%
+  gg_miss_var(show_pct=TRUE) +
+  labs(title="Missingness of Demographic Variables in HBN")
+```
+
+```{r, eval=FALSE}
+hbn_ %>%
+  select(age) %>%
+  summary() %>%
+  knitr::kable()
+```
+
+```{r, warning=FALSE, include=FALSE, eval=FALSE}
+hbn_ %>%
+  ggplot(aes(x=age))+
+  geom_histogram(binwidth = 2)+
+  theme_minimal()
+```
+
+```{r, eval=FALSE, include=FALSE}
+hbn_ %>%
+  ggplot(aes(gender)) +
+  geom_bar() +
+  theme_minimal()
+```
+
+```{r, include=FALSE, eval=FALSE}
+hbn_ %>%
+  ggplot(aes(x=study_site)) +
+  geom_bar() +
+  theme_minimal()
+```
+
+```{r, warning=FALSE, include=FALSE, eval=FALSE}
+hbn_ %>%
+  ggplot(aes(x=race))+
+  geom_bar() +
+  theme_minimal() +
+  ggtitle("Raw Count of Participant Race")
+```
+
+```{r, warning=FALSE, eval=FALSE, include=FALSE}
+hbn_ %>%
+  filter(!is.na(race)) %>%
+  ggplot(aes(x=race))+
+  geom_bar() +
+  theme_minimal() +
+  ggtitle("Raw Count of Participant Race (NA removed)")
+```
+
+```{r, warning=FALSE, include=FALSE, eval=FALSE}
+hbn_ %>%
+  ggplot(aes(x=bmi))+
+  geom_histogram(binwidth = 2) +
+  theme_minimal()
+```
+
+```{r, warning=FALSE, include=FALSE, eval=FALSE}
+hbn_ %>%
+  ggplot(aes(x=education))+
+  geom_bar() +
+  xlab("Education in years") +
+  theme_minimal()
+```
+
+```{r, warning=FALSE, include=FALSE, eval=FALSE}
+hbn_ %>%
+  mutate(race_old = factor(as.numeric(`PreInt_Demos_Fam,Child_Race`), levels=race_levels, labels=race_labels_old)) %>%
+  select(race, race_old) %>%
+  ggplot(aes(x=race)) +
+  geom_bar(aes(fill=race_old), position="fill") +
+  theme_minimal() +
+  ggtitle("Proportion of Old Race Labels Converted to New Labels") +
+  ylab("proportion")
+```
+
+
+```{r, warning=FALSE}
+hbn_final %>%
+  gg_miss_var(show_pct=TRUE)+
+  labs(title="Missingness of Demographic Variables in HBN")
+```
+
+# NKI Summary
+
+```{r}
+nki_final <- nki_ %>%
+  select(participant_id, age, age_group, sex, race_old, race, education_years, study, study_site, selection) %>%
+  filter(participant_id %in% ids$participant_id)# %>%
+  #mutate(gender=factor(gender))
+```
+
+```{r}
+cat("Total subjects: ", length(unique(nki_final$participant_id)))
+cat("\n")
+cat("Current Variables:\n")
+cat(paste0("- ", colnames(nki_final)), sep="\n")
+```
+
+```{r, warning=FALSE}
+nki_final %>%
+  select(-race_old) %>%
+  gg_miss_var(show_pct=TRUE)+
+  labs(title="Missingness of Demographic Variables in NKI")
+```
+
+# PNC Summary
+
+
+```{r}
+pnc_final <- pnc_ %>%
+  select(participant_id, age, age_group, sex, race, education_years, study, study_site, selection, wave) %>%
+  filter(participant_id %in% ids$participant_id)
+```
+
+```{r}
+cat("Total subjects: ", length(unique(pnc_final$participant_id)))
+cat("\n")
+cat("Current Variables:\n")
+cat(paste0("- ", colnames(pnc_final)), sep="\n")
+```
+
+
+```{r}
+pnc_final %>%
+  gg_miss_var(show_pct=TRUE) +
+  labs(title="Missingness of Demographic Variables in PNC")
+```
+
+# HRC Summary
+
+```{r}
+bhrc_final <- bhrc_ %>%
+  select(participant_id, age, age_group, sex, race, education_years, study, study_site, selection, wave) %>%
+  filter(participant_id %in% ids$participant_id)# %>%
+  #mutate(gender = factor(Gender)) %>%
+  #select(-Gender)
+```
+
+
+```{r}
+cat("Total subjects: ", length(unique(bhrc_final$participant_id)))
+cat("\n")
+cat("Current Variables:\n")
+cat(paste0("- ", colnames(bhrc_final)), sep="\n")
+```
+
+```{r}
+bhrc_final %>%
+  gg_miss_var(show_pct=TRUE) +
+  labs(title="Missingness of Demographic Variables in HRC")
+```
+
+# Harmonization
+
+```{r}
+harm <- bind_rows(hbn_final, nki_final, pnc_final, bhrc_final)
+
+harm <- harm %>%
+  mutate(race = case_when(
+    race == "White"       ~ "White",
+    race == "Black"       ~ "Black",
+    race == "Mixed"       ~ "Mixed",
+    race == "Native"       ~ "Other",
+    race == "Asian"       ~ "Asian",
+    race == "Other"       ~ "Other"
+  ) %>% as.factor())
+
+harm %>%
+  select(-race_old, -bmi, -age_group) %>%
+  gg_miss_var(show_pct = TRUE)
+```
+
+## Variables Viz.
+
+```{r}
+harm %>%
+  ggplot(aes(x=age))+
+  geom_density(aes(fill=study), alpha=0.25)+
+  theme_minimal() +
+  ggtitle("Distribution of Age")
+```
+
+
+```{r}
+harm %>%
+  ggplot(aes(x=sex))+
+  geom_bar()+
+  theme_minimal() +
+  ggtitle("Participat Sex")
+```
+
+# Discussion
+
+- Done:
+  - Collapsed race values
+
+```{r, include=FALSE, warn=FALSE}
+hbn_ %>%
+  filter(!is.na(race)) %>%
+  ggplot(aes(x=race))+
+  geom_bar() +
+  theme_minimal() +
+  ggtitle("Raw Count of Participant Race in HBN (NA removed)")
+```
+
+```{r, include=FALSE}
+hbn_ %>%
+  mutate(race_old = factor(as.numeric(`PreInt_Demos_Fam,Child_Race`), levels=race_levels, labels=race_labels_old)) %>%
+  select(race, race_old) %>%
+  ggplot(aes(x=race)) +
+  geom_bar(aes(fill=race_old), position="fill") +
+  theme_minimal() +
+  ggtitle("Proportion of Old Race Labels Converted to New Labels in HBN") +
+  ylab("proportion")
+```
+
+```{r, include=TRUE, warning=FALSE}
+harm %>%
+  #filter(!is.na(race)) %>%
+  ggplot(aes(x=race))+
+  geom_bar() +
+  theme_minimal() +
+  ggtitle("Raw Count of Participant Race in Harmonized")
+```
+
+  - Sex vs. Gender
+
+  - Collapsing of NKI *sessions* into *waves*
+
+```
+wave = case_when(
+      wave == "BAS1"    ~ 1,
+      wave == "BAS2"    ~ 1,
+      wave == "BAS3"    ~ 1,
+      wave == "FLU1"    ~ 2,
+      wave == "FLU2"    ~ 3,
+      wave == "FLU3"    ~ 3
+      )
+```
+
+```
+> nki_$wave %>% table()
+.
+BAS1 BAS2 BAS3 FLU1 FLU2 FLU3  NFB 
+1484   92    1  492  351   23    4 
+```
+
+  - One participant with BAS3 and 4 with NFB -- how to deal?
+
+  - What should we use for age NKI? Old value was `nkicbcl_128 -> age`
+```{r}
+nki_ %>%
+  select(age, age_04) %>%
+  mutate(across(everything(), as.numeric)) %>%
+  summary()
+```
+
+- To-do:
+  - HCP-D (data available)
+  - CCNP (data available)
+  - PACCT? (On-hold)
+  - handedness
+  - parent education
+  - bmi
+  - age at X
+
+
+
+
+

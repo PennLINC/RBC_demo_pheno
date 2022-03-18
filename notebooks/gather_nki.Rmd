@@ -1,0 +1,536 @@
+---
+title: "NKI Demographics"
+output: html_notebook
+---
+
+Below follows the preprocessing of the NKI demographics data. We ultimately want:
+
+-   Age
+-   Sex
+-   Race
+-   Education
+-   Handedness
+-   Parent's education
+-   BMI
+
+```{r}
+library(tidyverse)
+library(naniar)
+library(ggsankey)
+library(forcats)
+library(here)
+
+data_path <- here("data")
+```
+
+# Read in
+
+```{r, cache=TRUE}
+nki_raw1 <- read_csv(here(data_path, "RocklandSample_04JAN2021.csv")) %>%
+  rename("participant_id" = Identifiers) %>%
+  separate(participant_id, c("participant_id", "wave"))
+
+nki_raw2 <- read_csv(here(data_path, "RocklandSample_01SET2021_cog.csv")) %>%
+  rename("participant_id" = Identifiers) %>%
+  separate(participant_id, c("participant_id", "wave"))
+
+nki_ehq <- read_csv(here(data_path, "NKI_EHQ_data-2022-03-17T18_27_10.630Z.csv")) %>%
+  rename("participant_id" = Identifiers) %>%
+  separate(participant_id, c("participant_id", "wave"))
+
+nki_ses <- read_csv(here(data_path, "NKI_SES_data-2022-03-18T03_07_58.757Z.csv")) %>%
+  rename("participant_id" = Identifiers) %>%
+  separate(participant_id, c("participant_id", "wave"))
+```
+
+```{r}
+nki_wave_levels <- c(1, 1, 1, 2, 3, 3)
+nki_wave_labels <- c('BAS1', 'BAS2', 'BAS3', 'FLU1', 'FLU2', 'FLU3')
+
+nki_raw <- nki_raw1 %>%
+  left_join(nki_raw2, by=c("participant_id", "wave")) %>%
+  left_join(nki_ehq, by=c("participant_id", "wave")) %>%
+  left_join(nki_ses, by=c("participant_id", "wave")) %>%
+  mutate(participant_id = str_c("sub-", participant_id))
+nki_ <- nki_raw %>%
+  mutate(
+    wave = case_when(
+      wave == "BAS1"    ~ 1,
+      wave == "BAS2"    ~ 1,
+      wave == "BAS3"    ~ 1,
+      wave == "FLU1"    ~ 2,
+      wave == "FLU2"    ~ 3,
+      wave == "FLU3"    ~ 3
+      ) %>% factor(levels = nki_wave_levels, labels =nki_wave_labels)
+    )
+
+```
+
+
+```{r}
+nki_ %>%
+  sample_n(30)
+```
+
+Let's grab the first relevant variables
+
+# Age
+
+```{r}
+nki_ <- nki_ %>%
+  mutate(age = as.numeric(dem_001))
+```
+
+```{r}
+qplot(nki_$age)
+```
+
+# Sex
+
+```{r}
+sex_levels <- c("Male", "Female", "Other")
+nki_ <- nki_ %>%
+  mutate(sex = 
+           case_when(
+             dem_002=="1" ~ "Male",
+             dem_002=="2"~ "Female") %>% factor(levels = sex_levels)
+         ) 
+```
+
+```{r}
+qplot(nki_$sex)
+```
+
+# Race
+
+We have the following from BHRC team:
+
+```
+#1= American Indian or Native Alaskan
+#2= Asian
+#3= Black  or African American
+#4= Native Hawiian or Other Pacific Islander
+#5= White
+#6= Other Race
+```
+
+```{r}
+nki_ %>%
+  select(dem_004) %>%
+  table()
+```
+
+Only want: black, white, asian, mixed, other, unknown, hispanic
+
+```{r}
+nki_race_old_labels <- c("American Indian or Native Alaskan", "Asian", "Black or African American", "Native Hawiian or Other Pacific Islander", "White", "Other")
+nki_race_old_levels <- c(1:6)
+
+race_levels <- c("Black", "White", "Asian", "Mixed", "Hispanic", "Other", "Unknown")
+  
+nki_ %>%
+  mutate(
+    race_old = factor(dem_004, labels = nki_race_old_labels, levels = nki_race_old_levels),
+    race = case_when(
+    race_old == "American Indian or Native Alaskan"           ~ "Other",
+    race_old == "Native Hawiian or Other Pacific Islander"    ~ "Other",
+    race_old == "White"                                       ~ "White",
+    race_old == "Asian"                                       ~ "Asian",
+    race_old == "More than one race"                          ~ "Mixed",
+    race_old == "Black or African American"                   ~ "Black",
+    race_old == "Unknown or not reported"                     ~ "Unknown"
+  ) %>% factor(levels = race_levels)) -> nki_
+```
+
+
+```{r}
+nki_ %>%
+  ggplot(aes(x=race)) +
+  geom_bar()
+```
+
+```{r}
+nki_ %>%
+  ggsankey::make_long(race_old, race) %>%
+  ggplot(aes(x = x,
+             next_x = next_x,
+             node = node,
+             next_node = next_node,
+             fill = factor(node),
+             label = node)) +
+  theme_bw() +
+  geom_sankey(node.colour = "black", show.legend = FALSE) +
+  geom_sankey_label(size = 2, color = "black", fill= "white", hjust = -0.5, check_overlap=TRUE) +
+  theme(legend.position = "none") +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank()) +
+  labs(title = "Old name -> New name for race categories")
+```
+
+# Education
+
+Using reported grade:
+
+> Current grade child participant is in as reported by parent/guardian.
+
+```{r}
+nki_$sesc_10 %>%
+  table()
+```
+
+These are numeric grades of education, so no categories necessary.
+
+```{r}
+nki_ <- nki_ %>%
+  mutate(
+    education = as.numeric(sesc_10) %>% 
+      scales::ordinal() %>%
+      str_c(" Grade")
+  ) %>%
+  mutate(education = case_when(sesc_10 == "0" ~ "Kindergarten", TRUE ~ education))
+```
+
+```{r}
+nki_ %>%
+  ggplot(aes(x=education)) +
+  geom_bar()  +
+  theme(axis.text.x = element_text(angle=45, hjust = 1))
+```
+
+There are a lot of NAs, so we use the hollingshead education codes to hopefully
+clear the rest:
+
+Using the Hollingshead education codes:
+
+> Less than seventh grade = 1, Junior high school (including 9h grade) = 2, Partial high school (10th or 11th grade) = 3, High school graduate = 4, Partial college (at least one year or specialized training) = 5, Standard college or university graduation = 6, Graduate/professional = 7, Don't know = DK, Missing data = MD
+
+```{r}
+nki_$nkises_01a %>%
+  table()
+```
+
+
+```{r}
+nki_ %>%
+  # encode old values
+  mutate(hollings_edu = case_when(
+    nkises_01a == 1 ~ "Less than seventh grade",
+    nkises_01a == 2 ~ "Junior high school (including 9h grade)",
+    nkises_01a == 3 ~ "Partial high school (10th or 11th grade)",
+    nkises_01a == 4 ~ "High school graduate",
+    nkises_01a == 5 ~ "Partial college (at least one year or specialized training)",
+    nkises_01a == 6 ~ "Standard college or university graduation",
+    nkises_01a == 7 ~ "Graduate/professional",
+    nkises_01a == "DK" ~ "Don't know",
+    nkises_01a == "MD" ~ "Missing data"
+    )
+  ) -> nki_
+
+nki_ %>%
+  mutate(education = case_when(
+    !is.na(education) ~ education,
+    str_detect(hollings_edu, "Junior high")          ~ "9th Grade",
+    str_detect(hollings_edu, "Partial high")         ~ "11th Grade",
+    str_detect(hollings_edu, "High school graduate") ~ "High School Graduate",
+    str_detect(hollings_edu, "Partial college")      ~ "Some College",
+    str_detect(hollings_edu, "Standard college")     ~ "Bachelor's Degree",
+    str_detect(hollings_edu, "professional")         ~ "Graduate Degree",
+    ) %>% factor()
+  ) -> nki_
+```
+
+```{r}
+nki_ %>%
+  ggplot(aes(x=education)) +
+  geom_bar()  +
+  theme(axis.text.x = element_text(angle=45, hjust = 1))
+```
+
+
+```{r}
+nki_ %>%
+  select(hollings_edu, sesc_10, education) %>%
+  mutate(source = case_when(
+    !is.na(hollings_edu) ~ hollings_edu,
+    TRUE ~ sesc_10
+    )
+  ) %>% replace_with_na(list(source = ".")) %>%# View()
+  ggsankey::make_long(source, education) %>%
+  ggplot(aes(x = x,
+             next_x = next_x,
+             node = node,
+             next_node = next_node,
+             fill = factor(node),
+             label = node)) +
+  theme_bw() +
+  geom_sankey(node.colour = "black", show.legend = FALSE) +
+  geom_sankey_label(size = 2, color = "black", fill= "white", hjust = -0.5, check_overlap=TRUE) +
+  theme(legend.position = "none") +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank()) +
+  labs(title = "Old name -> New name for education categories")
+```
+
+
+# Parent Education
+
+Using the same Hollingshead education codes:
+
+> Less than seventh grade = 1, Junior high school (including 9h grade) = 2, Partial high school (10th or 11th grade) = 3, High school graduate = 4, Partial college (at least one year or specialized training) = 5, Standard college or university graduation = 6, Graduate/professional = 7, Don't know = DK, Missing data = MD
+
+```{r}
+nki_$nkises_05a %>%
+  table()
+```
+
+```{r}
+nki_ %>%
+  mutate(education_m_hollings = case_when(
+    nkises_05a == "0" | nkises_05a == "MD" ~ NA_character_,
+    nkises_05a == "1" ~ "Less than seventh grade",
+    nkises_05a == "2" ~ "Junior high school (including 9h grade)",
+    nkises_05a == "3" ~ "Partial high school (10th or 11th grade)",
+    nkises_05a == "4" ~ "High school graduate",
+    nkises_05a == "5" ~ "Partial college (at least one year or specialized training)",
+    nkises_05a == "6" ~ "Standard college or university graduation",
+    nkises_05a == "7" ~ "Graduate/professional",
+    nkises_05a == "DK" ~ "Don't know",
+    ) %>% factor()
+  ) -> nki_
+
+nki_ %>%
+  mutate(education_m = case_when(
+    str_detect(education_m_hollings, "Less than")          ~ "6th Grade",
+    str_detect(education_m_hollings, "Junior high")          ~ "9th Grade",
+    str_detect(education_m_hollings, "Partial high")         ~ "11th Grade",
+    str_detect(education_m_hollings, "High school graduate") ~ "High School Graduate",
+    str_detect(education_m_hollings, "Partial college")      ~ "Some College",
+    str_detect(education_m_hollings, "Standard college")     ~ "Bachelor's Degree",
+    str_detect(education_m_hollings, "professional")         ~ "Graduate Degree",
+    str_detect(education_m_hollings, "Don't")         ~ NA_character_
+    ) %>% factor()
+  ) -> nki_
+
+nki_ %>%
+  mutate(education_f_hollings = case_when(
+    nkises_07a == "0" | nkises_05a == "MD" ~ NA_character_,
+    nkises_07a == "1" ~ "Less than seventh grade",
+    nkises_07a == "2" ~ "Junior high school (including 9h grade)",
+    nkises_07a == "3" ~ "Partial high school (10th or 11th grade)",
+    nkises_07a == "4" ~ "High school graduate",
+    nkises_07a == "5" ~ "Partial college (at least one year or specialized training)",
+    nkises_07a == "6" ~ "Standard college or university graduation",
+    nkises_07a == "7" ~ "Graduate/professional",
+    nkises_07a == "DK" ~ "Don't know",
+    ) %>% factor()
+  ) -> nki_
+
+nki_ %>%
+  mutate(education_f = case_when(
+    str_detect(education_f_hollings, "Less than")          ~ "6th Grade",
+    str_detect(education_f_hollings, "Junior high")          ~ "9th Grade",
+    str_detect(education_f_hollings, "Partial high")         ~ "11th Grade",
+    str_detect(education_f_hollings, "High school graduate") ~ "High School Graduate",
+    str_detect(education_f_hollings, "Partial college")      ~ "Some College",
+    str_detect(education_f_hollings, "Standard college")     ~ "Bachelor's Degree",
+    str_detect(education_f_hollings, "professional")         ~ "Graduate Degree",
+    str_detect(education_f_hollings, "Don't")         ~ NA_character_
+    ) %>% factor()
+  ) -> nki_
+
+```
+
+```{r}
+nki_ %>%
+  select(education_f_hollings, education_f) %>%
+  filter(complete.cases(.)) %>%
+  ggsankey::make_long(education_f_hollings, education_f) %>%
+  ggplot(aes(x = x,
+             next_x = next_x,
+             node = node,
+             next_node = next_node,
+             fill = factor(node),
+             label = node)) +
+  theme_bw() +
+  geom_sankey(node.colour = "black", show.legend = FALSE) +
+  geom_sankey_text(size = 2, color = "black", fill= "white", hjust = -0.5, check_overlap=TRUE) +
+  theme(legend.position = "none") +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank()) +
+  labs(title = "Old name -> New name for father's education categories")
+```
+
+
+# Handedness
+
+We get this from the laterality:
+
+```{r}
+nki_$dehq_16 %>%
+  qplot() +
+  coord_flip()
+```
+
+```{r}
+nki_ %>%
+  mutate(
+    handedness = case_when(
+      str_detect(dehq_16, "Error") == TRUE ~ "NA",
+      TRUE                         ~ as.character(dehq_16)
+      ),
+    handedness = as.numeric(handedness)
+    ) %>%
+  mutate(
+    handedness = case_when(handedness > 0  ~ "Right",
+                           handedness < 0  ~ "Left",
+                           handedness == 0 ~ "Ambidextrous"
+                           ) %>% factor()
+  ) -> nki_
+```
+
+
+```{r}
+nki_$handedness %>%
+  qplot()
+```
+
+# BMI
+
+We use the [CDC formula for BMI](https://www.cdc.gov/nccdphp/dnpao/growthcharts/training/bmiage/page5_2.html):
+
+$ \frac{ \text{weight} (lb)} { \text{height} (in)^2 \times 703}$ 
+
+```{r}
+# we get height in inches from vit_05 in the data dictionary
+nki_ <- nki_ %>%
+  mutate(bmi = vit_05)
+```
+
+```{r}
+nki_ %>%
+  ggplot(aes(x=bmi)) +
+  geom_histogram()
+```
+
+# Summary
+
+```{r}
+nki_final <- nki_ %>%
+  mutate(wave = wave,
+         study = "NKI" %>% factor(),
+         study_site = "NKI" %>% factor()
+  ) %>%
+  select(participant_id, study, study_site, wave, age, sex, race, bmi, handedness, education, education_f, education_m) %>%
+  
+  # fill out NAs downward for each participant's wave visit
+  group_by(participant_id) %>%
+  fill(age:education_m, .direction="downup") %>%
+  ungroup()
+```
+
+```{r}
+gg_miss_var(nki_final, show_pct = TRUE)
+```
+# Outputs
+
+We write the output to RDS as well as the data dictionary.
+
+```{r}
+nki_final %>%
+  write_rds(here("outputs", "nki_data.rds"))
+```
+
+```{r}
+age <- list(
+  LongName = "ParticipantAge",
+  Description = "Participant age in years at the time of scan/intake. If original data is collected in months, the final value is divided by 12.",
+  Units = "Years"
+)
+
+race <- list(
+  LongName = "ParticipantRace",
+  Description = "Participant's race.",
+  Levels = levels(nki_final$race)
+)
+
+sex <- list(
+  LongName = "ParticipantSex",
+  Description = "Participant's sex.",
+  Levels = levels(nki_final$sex)
+)
+
+bmi <- list(
+  LongName = "ParticipantBMI",
+  Description = "Participant's Body Mass Index. ",
+  TermURL = "https://www.cdc.gov/nccdphp/dnpao/growthcharts/training/bmiage/page5_2.html",
+  Units = "lbs/inches^2; BMI is normally reported without units."
+)
+
+handedness <- list(
+  LongName = "ParticipantHandedness",
+  Description = "Participant handedness. Either self-reported, or result of binarizing the Edinburgh Handedness Scale. Participants whose Edinburgh Handedness Scale value is 0 are reported as Ambidextrous",
+  Levels = levels(nki_final$handedness),
+  TermURL = "https://en.wikipedia.org/wiki/Edinburgh_Handedness_Inventory"
+)
+
+education <- list(
+  LongName = "ParticipantEducation",
+  Description = "Participant education level at time of scan/intake.",
+  Levels = levels(nki_final$education)
+)
+
+education_f <- list(
+  LongName = "FatherEducation",
+  Description = "Father's education level at time of scan/intake.",
+  Levels = levels(nki_final$education)
+)
+
+education_m <- list(
+  LongName = "MotherEducation",
+  Description = "Mother's education level at time of scan/intake.",
+  Levels = levels(nki_final$education)
+)
+
+wave <- list(
+  LongName = "ParticipantWave",
+  Description = "Participant's recruitment wave.",
+  Levels = levels(nki_final$wave)
+)
+
+study_site <- list(
+  LongName = "ParticipantStudySite",
+  Description = "Participant's study recruitment site.",
+  Levels = levels(nki_final$study_site)
+)
+
+study <- list(
+  LongName = "ParticipantStudy",
+  Description = "Participant's study.",
+  Levels = levels(nki_final$study)
+)
+
+list(age=age, 
+     race=race, 
+     sex=sex, 
+     bmi=bmi, 
+     handedness=handedness, 
+     education=education, 
+     education_f=education_f, 
+     education_m=education_m, 
+     wave=wave, 
+     study_site=study_site, 
+     study=study) %>%
+  #jsonlite::toJSON(auto_unbox = TRUE) %>%
+  #jsonlite::prettify() %>%
+  jsonlite::write_json(here("outputs", "nki_dictionary.json"), auto_unbox=TRUE, pretty=TRUE)
+```
+

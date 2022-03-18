@@ -1,0 +1,493 @@
+---
+title: "HCP-D Demographics"
+output: html_notebook
+---
+
+Below follows the preprocessing of the HCP-D demographics data. We ultimately want:
+
+-   Age
+-   Sex
+-   Race
+-   Education
+-   Handedness
+-   Parent's education
+-   BMI
+
+```{r}
+library(tidyverse)
+library(naniar)
+library(ggsankey)
+library(forcats)
+library(here)
+
+data_path <- here("data")
+```
+
+# Read in
+
+```{r, cache=TRUE}
+hcpd_raw <- read_csv(here(data_path, "hcpd_demographics.csv"))
+```
+
+```{r}
+hcpd_raw %>%
+  sample_n(30)
+```
+
+Let's grab the first relevant variables
+
+# Age
+
+```{r}
+hcpd_ <- hcpd_raw %>%
+  mutate(age = interview_age / 12)
+```
+
+```{r}
+qplot(hcpd_$age)
+```
+
+# Sex
+
+```{r}
+sex_levels <- c("Male", "Female", "Other")
+hcpd_ <- hcpd_ %>%
+  mutate(sex = case_when(
+    sex == "M"    ~ "Male",
+    sex == "F"    ~ "Female",
+    TRUE          ~ "Other"
+  ) %>% factor(levels = sex_levels))
+```
+
+```{r}
+qplot(hcpd_$sex)
+```
+
+# Race
+
+```{r}
+hcpd_ %>%
+  select(race) %>%
+  table()
+```
+
+Only want: black, white, asian, mixed, other, unknown, hispanic
+
+```{r}
+race_levels <- c("Black", "White", "Asian", "Mixed", "Hispanic", "Other", "Unknown")
+hcpd_ <- hcpd_ %>%
+  mutate(race_old = race)
+  
+hcpd_ <- hcpd_ %>%
+  mutate(
+    race = case_when(
+    race_old == "American Indian/Alaska Native"    ~ "Other",
+    race_old == "Hawaiian or Pacific Islander"      ~ "Other",
+    race_old == "White"                             ~ "White",
+    race_old == "Asian"                             ~ "Asian",
+    race_old == "More than one race"                ~ "Mixed",
+    race_old == "Black or African American"         ~ "Black",
+    race_old == "Unknown or not reported"           ~ "Unknown"
+  ) %>% factor(levels = race_levels))
+```
+
+```{r}
+hcpd_ %>%
+  ggplot(aes(x=race)) +
+  geom_bar()
+```
+
+```{r}
+hcpd_ %>%
+  ggsankey::make_long(race_old, race) %>%
+  ggplot(aes(x = x,
+             next_x = next_x,
+             node = node,
+             next_node = next_node,
+             fill = factor(node),
+             label = node)) +
+  theme_bw() +
+  geom_sankey(node.colour = "black", show.legend = FALSE) +
+  geom_sankey_label(size = 2, color = "black", fill= "white", hjust = -0.5, check_overlap=TRUE) +
+  theme(legend.position = "none") +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank()) +
+  labs(title = "Old name -> New name for race categories")
+```
+
+# Education
+
+We have the following input for education:
+
+```{r}
+hcpd_$bkgrnd_education %>%
+  table()
+```
+
+We'll keep these categorical and not calculate any numeric number of years of education:
+
+```{r}
+education_levels <- c("Kindergarten", str_c(scales::ordinal(1:12), " Grade"), "High School Diploma",
+                      "Some College", "Associate's Degree", "Bachelor's Degree", "Doctoral Degree",
+                      "Professional Degree")
+hcpd_ <- hcpd_ %>%
+  mutate(
+    education = case_when(
+      str_detect(bkgrnd_education, "NO DIPLOMA")  ~ "12th Grade",
+      str_detect(bkgrnd_education, "GRADE")       ~ str_to_title(bkgrnd_education),
+      str_detect(bkgrnd_education, "ASSOCIATE")   ~ "Associate's Degree",
+      str_detect(bkgrnd_education, "BACHELOR")    ~ "Bachelor's Degree",
+      str_detect(bkgrnd_education, "HIGH SCHOOL GRADUATE") ~ "High School Diploma",
+      str_detect(bkgrnd_education, "KINDER")      ~ str_to_title(bkgrnd_education),
+      str_detect(bkgrnd_education, "SOME COLLEGE")~ "Some College"
+    ),
+    education = str_replace(education, ";", "") %>% factor(levels = education_levels)
+  )
+```
+
+```{r}
+hcpd_ %>%
+  ggplot(aes(x=education)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle=45, hjust = 1))
+```
+
+```{r}
+hcpd_ %>%
+  ggsankey::make_long(bkgrnd_education, education) %>%
+  ggplot(aes(x = x,
+             next_x = next_x,
+             node = node,
+             next_node = next_node,
+             fill = factor(node),
+             label = node)) +
+  theme_bw() +
+  geom_sankey(node.colour = "black", show.legend = FALSE) +
+  geom_sankey_text(size = 2, color = "black", fill= "white", hjust = -0.5, check_overlap=TRUE) +
+  theme(legend.position = "none") +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank()) +
+  labs(title = "Old name -> New name for education categories")
+```
+
+# Parent Education
+
+We'll also encode this one with categories:
+
+```{r}
+hcpd_$father_edu_cat %>%
+  table()
+
+hcpd_$mother_edu_cat %>%
+  table()
+```
+
+We use the following from the dataset description:
+
+    SUBJECT: What is the highest grade or level of school your mother has completed or the highest degree she has received? 0 = Never attended or Kindergarten only; 1-11 = Grades 1=11; 12 = High school No diploma; 13 = GED or equivalent; 14 = High school graduate; 15 = Completed 12 years of school (but unable to determine if code 12, 13, or 14); 16 = Some college, no degree; 17 = Associate degree: occupational/technical/vocational program; 18 = Associate degree: academic program (includes non-US post high school/pre college levels); 19 = Associate degree (but unable to determine if code 16 or 17); 20 = Bachelor degree (e.g., BA, AB, BS, BBA); 21 = Completed 16 years of school (but unable to determine if code 16-20); 22 = Master?s degree (e.g., MA, MS, MEng, MEd, MBA); 23 = Professional school degree (e.g., MD, DDS, DVM, JD); 24 = Doctoral degree (e.g., PhD, EdD); 25 = Post Master degree (but unable to determine if code 20 or 21); 26 = Unknown/Missing; 98 = Refused to answer
+
+```{r}
+hcpd_ %>%
+  mutate(
+    # encode the old dictionary
+    father_edu_cat_vals = case_when(
+      father_edu_cat == 0                        ~ "Never attended or Kindergarten only",
+      father_edu_cat >= 1 & father_edu_cat < 12  ~ str_c("Grade ", father_edu_cat),
+      father_edu_cat == 12                       ~ "High school No diploma",
+      father_edu_cat == 13                       ~ "GED or equivalent",
+      father_edu_cat == 14                       ~ "High school graduate",
+      father_edu_cat == 15                       ~ "Completed 12 years of school (but unable to determine if code 12, 13, or 14)",
+      father_edu_cat == 16                       ~ "Some college, no degree",
+      father_edu_cat == 17                       ~ "Associate degree: occupational/technical/vocational program",
+      father_edu_cat == 18                       ~ "Associate degree: academic program (includes non-US post high school/pre college levels)",
+      father_edu_cat == 19                       ~ "Associate degree (but unable to determine if code 12, 13, or 14)",
+      father_edu_cat == 20                       ~ "Bachelor degree (e.g., BA, AB, BS, BBA)",
+      father_edu_cat == 21                       ~ "Completed 16 years of school (but unable to determine if code 16-20)",
+      father_edu_cat == 22                       ~ "Master's degree (e.g., MA, MS, MEng, MEd, MBA)",
+      father_edu_cat == 23                       ~ "Professional school degree (e.g., MD, DDS, DVM, JD)",
+      father_edu_cat == 24                       ~ "Doctoral degree (e.g., PhD, EdD)",
+      father_edu_cat == 25                       ~ "Post Master degree (but unable to determine if code 20 or 21)",
+      father_edu_cat == 26                       ~ "Unknown/Missing",
+      father_edu_cat == 98                       ~ "Refused to answer"
+    ),
+  # encode the old dictionary
+    mother_edu_cat_vals = case_when(
+      mother_edu_cat == 0                        ~ "Never attended or Kindergarten only",
+      mother_edu_cat >= 1 & mother_edu_cat < 12  ~ str_c("Grade ", mother_edu_cat),
+      mother_edu_cat == 12                       ~ "High school No diploma",
+      mother_edu_cat == 13                       ~ "GED or equivalent",
+      mother_edu_cat == 14                       ~ "High school graduate",
+      mother_edu_cat == 15                       ~ "Completed 12 years of school (but unable to determine if code 12, 13, or 14)",
+      mother_edu_cat == 16                       ~ "Some college, no degree",
+      mother_edu_cat == 17                       ~ "Associate degree: occupational/technical/vocational program",
+      mother_edu_cat == 18                       ~ "Associate degree: academic program (includes non-US post high school/pre college levels)",
+      mother_edu_cat == 19                       ~ "Associate degree (but unable to determine if code 12, 13, or 14)",
+      mother_edu_cat == 20                       ~ "Bachelor degree (e.g., BA, AB, BS, BBA)",
+      mother_edu_cat == 21                       ~ "Completed 16 years of school (but unable to determine if code 16-20)",
+      mother_edu_cat == 22                       ~ "Master's degree (e.g., MA, MS, MEng, MEd, MBA)",
+      mother_edu_cat == 23                       ~ "Professional school degree (e.g., MD, DDS, DVM, JD)",
+      mother_edu_cat == 24                       ~ "Doctoral degree (e.g., PhD, EdD)",
+      mother_edu_cat == 25                       ~ "Post Master degree (but unable to determine if code 20 or 21)",
+      mother_edu_cat == 26                       ~ "Unknown/Missing",
+      mother_edu_cat == 98                       ~ "Refused to answer"
+    )
+  ) -> hcpd_
+
+hcpd_ %>%
+  select(father_edu_cat_vals, mother_edu_cat_vals) %>%
+  mutate(across(everything(), as.factor)) %>%
+  summary()
+```
+
+Now convert it to more readable:
+
+```{r}
+
+make_ordinal <- function(val){
+  
+  str_extract(val, "[0-9]+") %>%
+    as.numeric() %>%
+    scales::ordinal() %>%
+    str_c(., "Grade", sep = " ")
+
+}
+
+hcpd_ %>%
+  mutate(
+    education_f = case_when(
+      str_detect(father_edu_cat_vals, "Associate")              ~ "Associate's Degree",
+      str_detect(father_edu_cat_vals, "Bachelor")               ~ "Bachelor's Degree",
+      str_detect(father_edu_cat_vals, "Doctoral")               ~ "Doctoral Degree",
+      str_detect(father_edu_cat_vals, "Master's")               ~ "Master's Degree",
+      str_detect(father_edu_cat_vals, "Professional")           ~ "Professional Degree",
+      str_detect(father_edu_cat_vals, "Some college")           ~ "Some College",
+      str_detect(father_edu_cat_vals, "Grade")                  ~ make_ordinal(father_edu_cat_vals),
+      str_detect(father_edu_cat_vals, "(High school graduate)|(GED or equivalent)")   ~ "High School Graduate",
+      str_detect(father_edu_cat_vals, "No diploma")             ~ "12th Grade"
+    ) %>% factor(levels = education_levels),
+    education_m = case_when(
+      str_detect(mother_edu_cat_vals, "Associate")              ~ "Associate's Degree",
+      str_detect(mother_edu_cat_vals, "Bachelor")               ~ "Bachelor's Degree",
+      str_detect(mother_edu_cat_vals, "Doctoral")               ~ "Doctoral Degree",
+      str_detect(mother_edu_cat_vals, "Master's")               ~ "Master's Degree",
+      str_detect(mother_edu_cat_vals, "Professional")           ~ "Professional Degree",
+      str_detect(mother_edu_cat_vals, "Some college")           ~ "Some College",
+      str_detect(mother_edu_cat_vals, "Grade")                  ~ make_ordinal(mother_edu_cat_vals),
+      str_detect(mother_edu_cat_vals, "(High school graduate)|(GED or equivalent)")   ~ "High School Graduate",
+      str_detect(mother_edu_cat_vals, "No diploma")             ~ "12th Grade"
+    ) %>% factor(levels = education_levels)
+  ) -> hcpd_
+```
+
+```{r}
+hcpd_ %>%
+  select(father_edu_cat_vals, education_f) %>%
+  filter(complete.cases(.)) %>%
+  ggsankey::make_long(father_edu_cat_vals, education_f) %>%
+  ggplot(aes(x = x,
+             next_x = next_x,
+             node = node,
+             next_node = next_node,
+             fill = factor(node),
+             label = node)) +
+  theme_bw() +
+  geom_sankey(node.colour = "black", show.legend = FALSE) +
+  geom_sankey_text(size = 2, color = "black", fill= "white", hjust = -0.5, check_overlap=TRUE) +
+  theme(legend.position = "none") +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank()) +
+  labs(title = "Old name -> New name for father's education categories")
+```
+
+```{r}
+hcpd_ %>%
+  select(mother_edu_cat_vals, education_m) %>%
+  filter(complete.cases(.)) %>%
+  ggsankey::make_long(mother_edu_cat_vals, education_m) %>%
+  ggplot(aes(x = x,
+             next_x = next_x,
+             node = node,
+             next_node = next_node,
+             fill = factor(node),
+             label = node)) +
+  theme_bw() +
+  geom_sankey(node.colour = "black", show.legend = FALSE) +
+  geom_sankey_text(size = 2, color = "black", fill= "white", hjust = -0.5, check_overlap=TRUE) +
+  theme(legend.position = "none") +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank()) +
+  labs(title = "Old name -> New name for mother's education categories")
+```
+
+
+# Handedness
+
+From the data dictionary:
+
+> hcp_handedness_score=sum(iihandwr,iihandth,iihandsc,iihandto,iihandkn,iihandsp,iihandbr,iihandma,iihandbo,iihandfk), where values for elements are coded left=-10, spl/usually left=-5, np=0, spr/usually right=5, and right=10. Missing elements are assigned the median of subject's other summands
+
+```{r}
+hcpd_$hcp_handedness_score %>%
+  qplot()
+```
+
+Most folks are right handed, what to do about folks who scored a zero?
+
+```{r}
+hcpd_ %>%
+  filter(hcp_handedness_score == 0)
+```
+
+Use ambi...
+
+```{r}
+hcpd_ <- hcpd_ %>%
+  mutate(handedness = case_when(hcp_handedness_score > 0  ~ "Right",
+                                hcp_handedness_score < 0  ~ "Left",
+                                TRUE                      ~ "Ambidextrous") %>% factor())
+```
+
+```{r}
+hcpd_$handedness %>%
+  qplot()
+```
+
+# BMI
+
+We use the [CDC formula for BMI](https://www.cdc.gov/nccdphp/dnpao/growthcharts/training/bmiage/page5_2.html):
+
+$ \frac{ \text{weight} (lb)} { \text{height} (in)^2 \times 703}$ 
+
+```{r}
+# we get height in inches from vtl007 in the data dictionary
+hcpd_ <- hcpd_ %>%
+  mutate(bmi = (weight_std / vtl007^2) * 703)
+```
+
+```{r}
+hcpd_ %>%
+  ggplot(aes(x=bmi)) +
+  geom_histogram()
+```
+
+# Summary
+
+```{r}
+hcpd_final <- hcpd_ %>%
+  mutate(wave = visit %>% factor(),
+         participant_id = str_c("sub-", src_subject_id),
+         study = "HCP-D" %>% factor(),
+         study_site = "HCP-D" %>% factor()
+  ) %>%
+  select(participant_id, study, study_site, wave, age, sex, race, bmi, handedness, education, education_f, education_m)
+```
+
+```{r}
+gg_miss_var(hcpd_final, show_pct = TRUE)
+```
+# Outputs
+
+We write the output to RDS as well as the data dictionary.
+
+```{r}
+hcpd_final %>%
+  write_rds(here("outputs", "hcpd_data.rds"))
+```
+
+```{r}
+age <- list(
+  LongName = "ParticipantAge",
+  Description = "Participant age in years at the time of scan/intake. If original data is collected in months, the final value is divided by 12.",
+  Units = "Years"
+)
+
+race <- list(
+  LongName = "ParticipantRace",
+  Description = "Participant's race.",
+  Levels = levels(hcpd_final$race)
+)
+
+sex <- list(
+  LongName = "ParticipantSex",
+  Description = "Participant's sex.",
+  Levels = levels(hcpd_final$sex)
+)
+
+bmi <- list(
+  LongName = "ParticipantBMI",
+  Description = "Participant's Body Mass Index. ",
+  TermURL = "https://www.cdc.gov/nccdphp/dnpao/growthcharts/training/bmiage/page5_2.html",
+  Units = "lbs/inches^2; BMI is normally reported without units."
+)
+
+handedness <- list(
+  LongName = "ParticipantHandedness",
+  Description = "Participant handedness. Either self-reported, or result of binarizing the Edinburgh Handedness Scale. Participants whose Edinburgh Handedness Scale value is 0 are reported as Ambidextrous",
+  Levels = levels(hcpd_final$handedness),
+  TermURL = "https://en.wikipedia.org/wiki/Edinburgh_Handedness_Inventory"
+)
+
+education <- list(
+  LongName = "ParticipantEducation",
+  Description = "Participant education level at time of scan/intake.",
+  Levels = levels(hcpd_final$education)
+)
+
+education_f <- list(
+  LongName = "FatherEducation",
+  Description = "Father's education level at time of scan/intake.",
+  Levels = levels(hcpd_final$education)
+)
+
+education_m <- list(
+  LongName = "MotherEducation",
+  Description = "Mother's education level at time of scan/intake.",
+  Levels = levels(hcpd_final$education)
+)
+
+wave <- list(
+  LongName = "ParticipantWave",
+  Description = "Participant's recruitment wave.",
+  Levels = levels(hcpd_final$wave)
+)
+
+study_site <- list(
+  LongName = "ParticipantStudySite",
+  Description = "Participant's study recruitment site.",
+  Levels = levels(hcpd_final$study_site)
+)
+
+study <- list(
+  LongName = "ParticipantStudy",
+  Description = "Participant's study.",
+  Levels = levels(hcpd_final$study)
+)
+
+list(age=age, 
+     race=race, 
+     sex=sex, 
+     bmi=bmi, 
+     handedness=handedness, 
+     education=education, 
+     education_f=education_f, 
+     education_m=education_m, 
+     wave=wave, 
+     study_site=study_site, 
+     study=study) %>%
+  #jsonlite::toJSON(auto_unbox = TRUE) %>%
+  #jsonlite::prettify() %>%
+  jsonlite::write_json(here("outputs", "hcpd_dictionary.json"), auto_unbox=TRUE, pretty=TRUE)
+```
+
