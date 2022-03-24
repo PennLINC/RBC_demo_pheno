@@ -1,9 +1,9 @@
 ---
-title: "HBN Demographics"
+title: "PNC Demographics"
 output: html_notebook
 ---
 
-Below follows the preprocessing of the HBN demographics data. We ultimately want:
+Below follows the preprocessing of the PNC demographics data. We ultimately want:
 
 -   Age
 -   Sex
@@ -26,19 +26,40 @@ data_path <- here("data")
 # Read in
 
 ```{r, cache=TRUE}
-hbn_raw <- read_csv(here(data_path, "HBNdata_2020_12_03.csv")) %>%
-  slice(-1) %>%
-  rename("participant_id" = Identifiers) %>%
-  mutate(participant_id = str_remove(participant_id, ",assessment")) %>%
+pnc_raw1 <- read_csv(here("data", "pnc_data.csv")) %>% 
+  rename(participant_id=bblid)
+pnc_raw2 <- read_csv(here("data", "bblid_renamed.csv")) %>%
+      rename(participant_id=reid)
+pnc_raw3 <- read_csv(here("data", "PNC_cnb_factor_scores_tymoore_20151006.csv")) %>%
+  left_join(pnc_raw2)
+pnc_raw4 <- read_csv(here("data", "PNC_cnb_wrat_scores_20161215.csv")) %>%
+  left_join(pnc_raw2)
+pnc_raw5 <- read_csv(here("data", "n1601_cnb_zscores_all_fr_20161215.csv")) %>%
+  left_join(pnc_raw2)
+pnc_raw6 <- read_csv(here("data", "n14513_goassess_screener_nontext_corrected_for_scala_20131021_redcap_pid272_fixed_20131101.csv")) %>%
+  mutate(bblid = PROBAND_BBLID) %>%
+  left_join(pnc_raw2)
+pnc_data <- pnc_raw1  %>%
+  left_join(
+    pnc_raw2
+    ) %>%
+  left_join(
+    pnc_raw3
+    ) %>%
+  left_join(
+    pnc_raw4
+    ) %>%
+  left_join(
+    pnc_raw5
+    ) %>%
+  left_join(
+    pnc_raw6
+    ) %>%
   mutate(participant_id = str_c("sub-", participant_id))
-
-hbn_lei <- read_csv(here(data_path, "hbn_demo_from_lei.csv")) %>%
-  mutate(participant_id = subject) %>%
-  rename(sex_old = sex)
 ```
 
 ```{r}
-hbn_raw %>%
+pnc_data %>%
   sample_n(30)
 ```
 
@@ -47,99 +68,82 @@ Let's grab the first relevant variables
 # Age
 
 ```{r}
-hbn_ <- hbn_raw %>%
-  mutate(age = as.numeric(`Basic_Demos,Age`))
+pnc_ <- pnc_data %>%
+  mutate(age = as.numeric(ageAtScan1)/12)
 ```
 
 ```{r}
-qplot(hbn_$age)
+qplot(pnc_$age)
 ```
 
 # Sex
 
 ```{r}
-sex_levels <- c("Male", "Female", "Other")
-hbn_ <- hbn_ %>%
-  mutate(sex = case_when(
-    `Basic_Demos,Sex` == "0"    ~ "Male",
-    `Basic_Demos,Sex` == "1"    ~ "Female",
-    TRUE                        ~ "Other"
-  ) %>% factor(levels = sex_levels))
+pnc_ <- pnc_ %>%
+  mutate(
+    sex = case_when(sex=="1" ~ "Male", sex=="2"~ "Female") %>% as.factor()
+  )
 ```
 
 ```{r}
-qplot(hbn_$sex)
+qplot(pnc_$sex)
 ```
 
 # Race
 
 ```{r}
-hbn_ %>%
-  select(`PreInt_Demos_Fam,Child_Race`) %>%
+pnc_ %>%
+  select(race) %>%
   table()
 ```
 
 Only want: black, white, asian, mixed, other, unknown, hispanic
 
 ```{r}
-hbn_ <- hbn_ %>%
+# 1= White; 2= BlackBlack/African American; 3= US_India/Alaska Native;4=Asian; 5=More Than One Race; 6=Hawaiian/Pacific; 9=Unknown/Unreported
+pnc_ <- pnc_ %>%
   mutate(race_old = case_when(
-    `PreInt_Demos_Fam,Child_Race` == "0"  ~ "White/Caucasian",
-    `PreInt_Demos_Fam,Child_Race` == "1"  ~ "Black/African American",
-    `PreInt_Demos_Fam,Child_Race` == "2"  ~ "Hispanic",
-    `PreInt_Demos_Fam,Child_Race` == "3"  ~ "Asian",
-    `PreInt_Demos_Fam,Child_Race` == "4"  ~ "Indian",
-    `PreInt_Demos_Fam,Child_Race` == "5"  ~ "Native American Indian",
-    `PreInt_Demos_Fam,Child_Race` == "6"  ~ "American Indian/Alaskan Native",
-    `PreInt_Demos_Fam,Child_Race` == "7"  ~ "Native Hawaiian/Other Pacific Islander",
-    `PreInt_Demos_Fam,Child_Race` == "8"  ~ "Two or more races",
-    `PreInt_Demos_Fam,Child_Race` == "9"  ~ "Other race",
-    `PreInt_Demos_Fam,Child_Race` == "10" ~ "Unknown",
-    `PreInt_Demos_Fam,Child_Race` == "11" ~ "Other",
+    race == 1  ~ "White",
+    race == 2  ~ "Black/African American",
+    race == 3  ~ "US_India/Alaska Native",
+    race == 4  ~ "Asian",
+    race == 5  ~ "More Than Once Race",
+    race == 6  ~ "Hawaiian/Pacific",
+    race == 9  ~ "Uknown/Unreported"
   ) %>% factor()
 )
-#0= White/Caucasian
-#1= Black/African American
-#8= Two or more races
-#5= Native American Indian
-#6= American Indian/Alaskan Native
-#7= Native Hawaiian/Other Pacific Islander
-#3= Asian
-#9= Other race
-#2= Hispanic
-#4= Indian
-#10= Unknown
 
 ```
 
 ```{r}
 race_levels <- c("Black", "White", "Asian", "Mixed", "Hispanic", "Other", "Unknown")
   
-hbn_ <- hbn_ %>%
+pnc_ <- pnc_ %>%
   mutate(
     race = case_when(
-    race_old == "White/Caucasian"                   ~ "White",
+    race_old == "White"                             ~ "White",
     race_old == "Black/African American"            ~ "Black",
-    race_old == "Hispanic"                          ~ "Hispanic",
     race_old == "Asian"                             ~ "Asian",
-    race_old == "Indian"                            ~ "Asian",
-    race_old == "Native American Indian"            ~ "Other",
+    race_old == "US_India/Alaska Native"            ~ "Other",
+    race_old == "Hawaiian/Pacific"                  ~ "Other",
     race_old == "American Indian/Alaskan Native"    ~ "Other",
-    race_old == "American Indian/Alaskan Native"    ~ "Other",
-    race_old == "Two or more races"                 ~ "Mixed",
+    race_old == "More Than Once Race"               ~ "Mixed",
     str_detect(race_old, "Other")                   ~ "Other",
-    race_old == "Unknown"                           ~ "Unknown"
-  ) %>% factor(levels = race_levels))
+    str_detect(race_old, "Unknown")                 ~ "Unknown",
+    
+  ), #%>% factor(levels = race_levels),
+  race = case_when(ethnicity == 1 ~ "Hispanic", TRUE ~ race) %>% factor()
+  )
 ```
 
 ```{r}
-hbn_ %>%
+pnc_ %>%
   ggplot(aes(x=race)) +
   geom_bar()
 ```
 
 ```{r}
-hbn_ %>%
+pnc_ %>%
   ggsankey::make_long(race_old, race) %>%
   ggplot(aes(x = x,
              next_x = next_x,
@@ -164,17 +168,17 @@ hbn_ %>%
 We have the following input for education:
 
 ```{r}
-hbn_ <- hbn_ %>%
-  mutate(education_years=as.numeric(`PreInt_EduHx,yrs_school`))
+pnc_ <- pnc_ %>%
+  mutate(education_years=as.numeric(edu1))
 ```
 
 ```{r}
-hbn_$education_years %>%
+pnc_$education_years %>%
   table()
 ```
 
 ```{r}
-hbn_ %>%
+pnc_ %>%
   ggplot(aes(x=education_years)) +
   geom_bar() +
   theme(axis.text.x = element_text(angle=45, hjust = 1))
@@ -184,11 +188,10 @@ hbn_ %>%
 
 
 ```{r}
-hbn_ %>%
-  left_join(hbn_lei) %>%
-  mutate(education_f = Father_Edu, education_m = Mother_Edu) -> hbn_
+pnc_ %>%
+  mutate(education_f = fedu1, education_m = medu1) -> pnc_
 
-hbn_ %>%
+pnc_ %>%
   select(education_f, education_m) %>%
   pivot_longer(c(education_f, education_m), names_to = c("parent"), values_to = c("years")) %>%
   ggplot(aes(x=years)) +
@@ -198,70 +201,57 @@ hbn_ %>%
 # Handedness
 
 ```{r}
-hbn_$Handedness %>%
+pnc_$handednessv2 %>%
   qplot()
 ```
 
 Most folks are right handed:
 
 ```{r}
-hbn_ %>%
+pnc_ %>%
   mutate(handedness = case_when(
-    Handedness == 1 ~ "Right",
-    Handedness == 2 ~ "Left"
+    handednessv2 == 1 ~ "Right",
+    handednessv2 == 2 ~ "Left",
+    handednessv2 == 3 ~ "Ambidextrous"
     ) %>% factor()
-  ) -> hbn_
+  ) -> pnc_
 ```
 
 ```{r}
-hbn_$handedness %>%
+pnc_$handedness %>%
   qplot()
 ```
 
 # BMI
 
-We use the [CDC formula for BMI](https://www.cdc.gov/nccdphp/dnpao/growthcharts/training/bmiage/page5_2.html):
-
-$ \frac{ \text{weight} (lb)} { \text{height} (in)^2 \times 703}$ 
+No BMI in the PNC inputs
 
 ```{r}
-# we get height in inches from vtl007 in the data dictionary
-hbn_ <- hbn_ %>%
-  mutate(bmi = as.numeric(`Physical,BMI`))
-```
-
-```{r}
-hbn_ %>%
-  ggplot(aes(x=bmi)) +
-  geom_histogram()
+pnc_$bmi <- NA
 ```
 
 # Summary
 
 ```{r}
-hbn_final <- hbn_ %>%
-  mutate(wave = 1,
-         study = "HBN" %>% factor(),
-         Site = `Basic_Demos,Study_Site` %>% factor()
+pnc_final <- pnc_ %>%
+  mutate(wave = timepoint,
+         study = "PNC",
+         selection = "Community"
   ) %>%
-  mutate(study_site = case_when(Site=="1" ~ "HBN-1",
-                                Site=="2" ~ "HBN-2",
-                                Site=="3" ~ "HBN-3",
-                                Site=="4" ~ "HBN-4",
-                                Site=="5" ~ "HBN-5")) %>%
-  select(participant_id, study, study_site, wave, age, sex, race, bmi, handedness, education_years, education_f, education_m)
+  mutate(study_site = "PNC-1") %>%
+  select(participant_id, study, study_site, wave, age, sex, race, handedness, education_years, education_f, education_m, bmi)
 ```
 
 ```{r}
-gg_miss_var(hbn_final, show_pct = TRUE)
+gg_miss_var(pnc_final, show_pct = TRUE)
 ```
 # Outputs
 
 We write the output to RDS as well as the data dictionary.
 
 ```{r}
-hbn_final %>%
-  write_rds(here("outputs", "hbn_data.rds"))
+pnc_final %>%
+  write_rds(here("outputs", "pnc_data.rds"))
 ```
 
 ```{r}
@@ -274,13 +264,13 @@ age <- list(
 race <- list(
   LongName = "ParticipantRace",
   Description = "Participant's race.",
-  Levels = levels(hbn_final$race)
+  Levels = levels(pnc_final$race)
 )
 
 sex <- list(
   LongName = "ParticipantSex",
   Description = "Participant's sex.",
-  Levels = levels(hbn_final$sex)
+  Levels = levels(pnc_final$sex)
 )
 
 bmi <- list(
@@ -293,7 +283,7 @@ bmi <- list(
 handedness <- list(
   LongName = "ParticipantHandedness",
   Description = "Participant handedness. Either self-reported, or result of binarizing the Edinburgh Handedness Scale. Participants whose Edinburgh Handedness Scale value is 0 are reported as Ambidextrous",
-  Levels = levels(hbn_final$handedness),
+  Levels = levels(pnc_final$handedness),
   TermURL = "https://en.wikipedia.org/wiki/Edinburgh_Handedness_Inventory"
 )
 
@@ -305,31 +295,31 @@ education_years <- list(
 education_f <- list(
   LongName = "FatherEducation",
   Description = "Father's education level at time of scan/intake.",
-  Levels = levels(hbn_final$education_f)
+  Levels = levels(pnc_final$education_f)
 )
 
 education_m <- list(
   LongName = "MotherEducation",
   Description = "Mother's education level at time of scan/intake.",
-  Levels = levels(hbn_final$education_m)
+  Levels = levels(pnc_final$education_m)
 )
 
 wave <- list(
   LongName = "ParticipantWave",
   Description = "Participant's recruitment wave.",
-  Levels = levels(hbn_final$wave)
+  Levels = levels(pnc_final$wave)
 )
 
 study_site <- list(
   LongName = "ParticipantStudySite",
   Description = "Participant's study recruitment site.",
-  Levels = levels(hbn_final$study_site)
+  Levels = levels(pnc_final$study_site)
 )
 
 study <- list(
   LongName = "ParticipantStudy",
   Description = "Participant's study.",
-  Levels = levels(hbn_final$study)
+  Levels = levels(pnc_final$study)
 )
 
 list(age=age, 
@@ -345,6 +335,6 @@ list(age=age,
      study=study) %>%
   #jsonlite::toJSON(auto_unbox = TRUE) %>%
   #jsonlite::prettify() %>%
-  jsonlite::write_json(here("outputs", "hbn_dictionary.json"), auto_unbox=TRUE, pretty=TRUE)
+  jsonlite::write_json(here("outputs", "pnc_dictionary.json"), auto_unbox=TRUE, pretty=TRUE)
 ```
 
