@@ -1,0 +1,33 @@
+---
+title: "Merge Results"
+output: html_notebook
+---
+
+This notebook merges the resultant phenotype files.
+
+
+```{r}
+library(tidyverse)
+library(here)
+```
+
+```{r}
+df <- list.files(here("outputs"), pattern = ".rds", full.names = TRUE) %>%
+  map_df(readRDS) %>%
+  mutate(across(c(study, study_site, wave, education), ~as.factor(.)))
+```
+
+```{r}
+df %>%
+  gg_miss_var(show_pct = TRUE)
+```
+
+```{r}
+summary(df)
+```
+
+```{r}
+df %>%
+  write_delim(here("outputs", "participants.tsv"), delim = "\t")
+```
+

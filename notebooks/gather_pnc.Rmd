@@ -60,7 +60,8 @@ pnc_data <- pnc_raw1  %>%
 
 ```{r}
 pnc_data %>%
-  sample_n(30)
+  sample_n(30) %>%
+  select(-participant_id)
 ```
 
 Let's grab the first relevant variables
@@ -234,12 +235,12 @@ pnc_$bmi <- NA
 
 ```{r}
 pnc_final <- pnc_ %>%
-  mutate(wave = timepoint,
+  mutate(wave = timepoint %>% as.character(),
          study = "PNC",
          selection = "Community"
   ) %>%
   mutate(study_site = "PNC-1") %>%
-  select(participant_id, study, study_site, wave, age, sex, race, handedness, education_years, education_f, education_m, bmi)
+  select(participant_id, study, study_site, wave, age, sex, race, handedness, education_years, education_years_f = education_f, education_years_m = education_m, bmi)
 ```
 
 ```{r}
@@ -292,15 +293,15 @@ education_years <- list(
   Description = "Participant education in years at time of scan/intake."
 )
 
-education_f <- list(
+education_years_f <- list(
   LongName = "FatherEducation",
-  Description = "Father's education level at time of scan/intake.",
+  Description = "Father's education in years at time of scan/intake.",
   Levels = levels(pnc_final$education_f)
 )
 
-education_m <- list(
+education_years_m <- list(
   LongName = "MotherEducation",
-  Description = "Mother's education level at time of scan/intake.",
+  Description = "Mother's education in years at time of scan/intake.",
   Levels = levels(pnc_final$education_m)
 )
 

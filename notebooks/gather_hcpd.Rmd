@@ -31,7 +31,8 @@ hcpd_raw <- read_csv(here(data_path, "hcpd_demographics.csv"))
 
 ```{r}
 hcpd_raw %>%
-  sample_n(30)
+  sample_n(30) %>%
+  select(-src_subject_id, -src_subject_id_caregiver, -src_subject_id_self, -subjectkey)
 ```
 
 Let's grab the first relevant variables
@@ -386,7 +387,7 @@ hcpd_ %>%
 
 ```{r}
 hcpd_final <- hcpd_ %>%
-  mutate(wave = visit %>% factor(),
+  mutate(wave = visit %>% as.character(),
          participant_id = str_c("sub-", src_subject_id),
          study = "HCP-D" %>% factor(),
          study_site = "HCP-D" %>% factor()

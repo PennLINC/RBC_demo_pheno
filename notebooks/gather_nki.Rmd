@@ -69,7 +69,8 @@ nki_ <- nki_raw %>%
 
 ```{r}
 nki_ %>%
-  sample_n(30)
+  sample_n(30) %>%
+  select(-participant_id)
 ```
 
 Let's grab the first relevant variables
@@ -425,7 +426,7 @@ nki_ %>%
 
 ```{r}
 nki_final <- nki_ %>%
-  mutate(wave = wave,
+  mutate(wave = wave %>% as.character(),
          study = "NKI" %>% factor(),
          study_site = "NKI" %>% factor()
   ) %>%

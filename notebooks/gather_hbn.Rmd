@@ -39,7 +39,8 @@ hbn_lei <- read_csv(here(data_path, "hbn_demo_from_lei.csv")) %>%
 
 ```{r}
 hbn_raw %>%
-  sample_n(30)
+  sample_n(30) %>%
+  select(-participant_id)
 ```
 
 Let's grab the first relevant variables
@@ -240,7 +241,7 @@ hbn_ %>%
 
 ```{r}
 hbn_final <- hbn_ %>%
-  mutate(wave = 1,
+  mutate(wave = "1",
          study = "HBN" %>% factor(),
          Site = `Basic_Demos,Study_Site` %>% factor()
   ) %>%
@@ -249,7 +250,7 @@ hbn_final <- hbn_ %>%
                                 Site=="3" ~ "HBN-3",
                                 Site=="4" ~ "HBN-4",
                                 Site=="5" ~ "HBN-5")) %>%
-  select(participant_id, study, study_site, wave, age, sex, race, bmi, handedness, education_years, education_f, education_m)
+  select(participant_id, study, study_site, wave, age, sex, race, bmi, handedness, education_years, education_years_f=education_f, education_years_m=education_m)
 ```
 
 ```{r}

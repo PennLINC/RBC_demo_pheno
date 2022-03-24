@@ -40,12 +40,13 @@ BHRC_ <- BHRC_data %>%
   mutate(participant_id = str_c("sub-", subjectid)) %>%
   mutate(wave = case_when(redcap_event_name=="wave0_arm_1" ~ 1, 
                           redcap_event_name=="wave1_arm_1" ~ 2,
-                          redcap_event_name=="wave2_arm_1" ~ 3))
+                          redcap_event_name=="wave2_arm_1" ~ 3) %>% as.character())
 ```
 
 ```{r}
 BHRC_ %>%
-  sample_n(30)
+  sample_n(30) %>%
+  select(-ident, -subjectid)
 ```
 
 Let's grab the first relevant variables
