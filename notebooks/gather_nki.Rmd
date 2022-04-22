@@ -43,6 +43,16 @@ nki_ses <- read_csv(here(data_path, "NKI_SES_data-2022-03-18T03_07_58.757Z.csv")
   separate(participant_id, c("participant_id", "wave"))
 ```
 
+------------------
+
+**NOTE**
+
+The NKI team mentioned to us that BAS1 BAS2 BAS3 are inconsequential differentiators.
+Instead, everyone with a BAS is considered a BASELINE visit. Individuals who return then
+get a FLU1 (follow up) visit. Those who return multiple times then get a TRT (treatment) visit, but we do not need to differentiate these -- they are just called FLU 1 and 2. 
+
+-----------------
+
 ```{r}
 nki_wave_levels <- c(1, 1, 1, 2, 3, 3)
 nki_wave_labels <- c('BAS1', 'BAS2', 'BAS3', 'FLU1', 'FLU2', 'FLU3')

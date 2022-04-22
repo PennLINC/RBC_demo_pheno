@@ -80,7 +80,14 @@ qplot(BHRC_$sex)
 
 ```{r}
 BHRC_$Child_race <- BHRC_$skincolor
-BHRC_ <- BHRC_ %>% mutate(Child_race=car::recode(Child_race,"1='White';2='Black'; 3='Mixed';5='Asian'; 4='Native'"))
+BHRC_ <- BHRC_ %>% mutate(
+  Child_race2 = as.numeric(Child_race)
+  ) %>%
+  mutate(Child_race =  case_when(Child_race == 1 ~ "White",
+                                  Child_race == 2 ~ "Black",
+                                  Child_race == 3 ~ "Mixed",
+                                  Child_race == 4 ~ "Native",
+                                  Child_race == 5 ~ "Asian"))
 
 BHRC_ %>%
   select(Child_race) %>%
