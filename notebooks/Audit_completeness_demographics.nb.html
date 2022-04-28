@@ -1777,7 +1777,7 @@ demographics_all &lt;- list.files(here(&quot;outputs&quot;), pattern = &quot;.rd
 <p>Filter by the participants we have in our final production dataset:</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBhbGwgdGhlIGltYWdpbmcgZGF0YXNldHMgd2UgaGF2ZVxuZ2V0X3N1YmplY3RzIDwtIGZ1bmN0aW9uKHgpe1xuICBcbiAgbGlzdC5kaXJzKHgsIHJlY3Vyc2l2ZT1GQUxTRSwgZnVsbC5uYW1lcyA9IEZBTFNFKSAlPiVcbiAgICB0aWJibGUoc291cmNlPXgsIHBhcnRpY2lwYW50X2lkPS4pICU+JVxuICAgIGZpbHRlcihzdHJfZGV0ZWN0KHBhcnRpY2lwYW50X2lkLCBcInN1Yi1cIikpICU+JVxuICAgIHJldHVybigpXG59XG5cbmRhdGFzZXRzIDwtIGxpc3QuZGlycyhcIi9jYmljYS9wcm9qZWN0cy9SQkMvUkJDX1JBV0RBVEEvYmlkc2RhdGFzZXRzXCIsIHJlY3Vyc2l2ZSA9IEZBTFNFKVxuaW1hZ2luZ19hbGwgPC0gbWFwX2RmKGRhdGFzZXRzLCBnZXRfc3ViamVjdHMpICU+JVxuICBtdXRhdGUoc3R1ZHkgPSBzdHJfZXh0cmFjdChzb3VyY2UsIFwiKD88PWJpZHNkYXRhc2V0c1xcXFwvKS4rXCIpKVxuXG5pbWFnaW5nX2FsbCA8LSBnZXRfc3ViamVjdHMoXCIvY2JpY2EvcHJvamVjdHMvUkJDL1JCQ19SQVdEQVRBL2JpZHNkYXRhc2V0cy9FQ0FTL0JJRFNcIikgJT4lXG4gIG11dGF0ZShzdHVkeSA9IHN0cl9leHRyYWN0KHNvdXJjZSwgXCIoPzw9Ymlkc2RhdGFzZXRzXFxcXC8pLisoPz1cXFxcLylcIikpICU+JVxuICBiaW5kX3Jvd3MoaW1hZ2luZ19hbGwpXG4gIFxuYGBgIn0= -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBhbGwgdGhlIGltYWdpbmcgZGF0YXNldHMgd2UgaGF2ZVxuZ2V0X3N1YmplY3RzIDwtIGZ1bmN0aW9uKHgpe1xuICBcbiAgbGlzdC5kaXJzKHgsIHJlY3Vyc2l2ZT1GQUxTRSwgZnVsbC5uYW1lcyA9IEZBTFNFKSAlPiVcbiAgICB0aWJibGUoc291cmNlPXgsIHBhcnRpY2lwYW50X2lkPS4pICU+JVxuICAgIGZpbHRlcihzdHJfZGV0ZWN0KHBhcnRpY2lwYW50X2lkLCBcInN1Yi1cIikpICU+JVxuICAgIHJldHVybigpXG59XG5cbmRhdGFzZXRzIDwtIGxpc3QuZGlycyhcIi9jYmljYS9wcm9qZWN0cy9SQkMvUkJDX1JBV0RBVEEvYmlkc2RhdGFzZXRzXCIsIHJlY3Vyc2l2ZSA9IEZBTFNFKVxuaW1hZ2luZ19hbGwgPC0gbWFwX2RmKGRhdGFzZXRzLCBnZXRfc3ViamVjdHMpICU+JVxuICBtdXRhdGUoc3R1ZHkgPSBzdHJfZXh0cmFjdChzb3VyY2UsIFwiKD88PWJpZHNkYXRhc2V0c1xcXFwvKS4rXCIpKVxuXG5pbWFnaW5nX2FsbCA8LSBnZXRfc3ViamVjdHMoXCIvY2JpY2EvcHJvamVjdHMvUkJDL1JCQ19SQVdEQVRBL2JpZHNkYXRhc2V0cy9FQ0FTL0JJRFNcIikgJT4lXG4gIG11dGF0ZShzdHVkeSA9IHN0cl9leHRyYWN0KHNvdXJjZSwgXCIoPzw9Ymlkc2RhdGFzZXRzXFxcXC8pLisoPz1cXFxcLylcIikpICU+JVxuICBiaW5kX3Jvd3MoaW1hZ2luZ19hbGwpICU+JVxuICBtdXRhdGUoc3R1ZHkgPSBpZmVsc2Uoc3R1ZHkgPT0gXCJIUkNcIiwgXCJCSFJDXCIsIHN0dWR5KSlcbiAgXG5gYGAifQ== -->
 <pre class="r"><code># all the imaging datasets we have
 get_subjects &lt;- function(x){
   
@@ -1793,7 +1793,8 @@ imaging_all &lt;- map_df(datasets, get_subjects) %&gt;%
 
 imaging_all &lt;- get_subjects(&quot;/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets/ECAS/BIDS&quot;) %&gt;%
   mutate(study = str_extract(source, &quot;(?&lt;=bidsdatasets\\/).+(?=\\/)&quot;)) %&gt;%
-  bind_rows(imaging_all)
+  bind_rows(imaging_all) %&gt;%
+  mutate(study = ifelse(study == &quot;HRC&quot;, &quot;BHRC&quot;, study))
   </code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
@@ -1801,10 +1802,23 @@ imaging_all &lt;- get_subjects(&quot;/cbica/projects/RBC/RBC_RAWDATA/bidsdataset
 <p>Imaging but no demographics at all:</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbInRibF9kZiIsInRibCIsImRhdGEuZnJhbWUiXSwibmNvbCI6MiwibnJvdyI6NX0sInJkZiI6IlVrUllNd3BZQ2dBQUFBTUFBd1lDQUFNRkFBQUFBQVZWVkVZdE9BQUFCQUlBQUFBQkFBUUFDUUFBQUFGNEFBQURFd0FBQUFJQUFBQVFBQUFBQlFBRUFBa0FBQUFFUWtoU1F3QUVBQWtBQUFBRVEwTk9VQUFFQUFrQUFBQUVSVU5CVXdBRUFBa0FBQUFEU0VKT0FBUUFDUUFBQUFWSVExQXRSQUFBQUEwQUFBQUZBQUFBQndBQUFNTUFBQUVyQUFBQVlnQUFBb3dBQUFRQ0FBQUFBUUFFQUFrQUFBQUZibUZ0WlhNQUFBQVFBQUFBQWdBRUFBa0FBQUFGYzNSMVpIa0FCQUFKQUFBQUFXNEFBQVFDQUFBQUFRQUVBQWtBQUFBSmNtOTNMbTVoYldWekFBQUFEUUFBQUFLQUFBQUEvLy8vK3dBQUJBSUFBQUFCQUFRQUNRQUFBQVZqYkdGemN3QUFBQkFBQUFBQkFBUUFDUUFBQUFwa1lYUmhMbVp5WVcxbEFBQUEvZ0FBQkFJQUFBQUJBQVFBQ1FBQUFBZHZjSFJwYjI1ekFBQUNFd0FBQUFVQUFBQVFBQUFBQVFBRUFBa0FBQUFCY2dBQUFCQUFBQUFCQUFRQUNRQUFBQkIxYm01aGJXVmtMV05vZFc1ckxUTXdBQUFBQ2dBQUFBRUFBQUFBQUFBQURRQUFBQUVBQUFBRkFBQUFEUUFBQUFFQUFBQUNBQUFFQWdBQUF2OEFBQUFRQUFBQUJRQUVBQWtBQUFBR1pXNW5hVzVsQUFRQUNRQUFBQVZzWVdKbGJBQUVBQWtBQUFBT2NtOTNibUZ0WlhNdWNISnBiblFBQkFBSkFBQUFDbkp2ZDNNdWRHOTBZV3dBQkFBSkFBQUFDbU52YkhNdWRHOTBZV3dBQUFEK0FBQUEvZz09In0= -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWlzc2luZ19kZW1vIDwtIGltYWdpbmdfYWxsICU+JVxuICBsZWZ0X2pvaW4oZGVtb2dyYXBoaWNzX2FsbCkgJT4lXG4gIGZpbHRlcihpZl9hbGwoIWMoc291cmNlLCBwYXJ0aWNpcGFudF9pZCwgc3R1ZHkpLCBpcy5uYSkpXG5gYGAifQ== -->
+<pre class="r"><code>missing_demo &lt;- imaging_all %&gt;%
+  left_join(demographics_all) %&gt;%
+  filter(if_all(!c(source, participant_id, study), is.na))</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBjKFwicGFydGljaXBhbnRfaWRcIiwgXCJzdHVkeVwiKVxuIn0= -->
+<pre><code>Joining, by = c(&quot;participant_id&quot;, &quot;study&quot;)</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWlzc2luZ19kZW1vICU+JVxuICBncm91cF9ieShzdHVkeSkgJT4lXG4gIHN1bW1hcmlzZShuPW4oKSlcbmBgYCJ9 -->
+<pre class="r"><code>missing_demo %&gt;%
+  group_by(study) %&gt;%
+  summarise(n=n())</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbInRibF9kZiIsInRibCIsImRhdGEuZnJhbWUiXSwibmNvbCI6MiwibnJvdyI6NH0sInJkZiI6IlVrUllNd3BZQ2dBQUFBTUFBd1lDQUFNRkFBQUFBQVZWVkVZdE9BQUFCQUlBQUFBQkFBUUFDUUFBQUFGNEFBQURFd0FBQUFJQUFBQVFBQUFBQkFBRUFBa0FBQUFFUWtoU1F3QUVBQWtBQUFBRVEwTk9VQUFFQUFrQUFBQUVSVU5CVXdBRUFBa0FBQUFGU0VOUUxVUUFBQUFOQUFBQUJBQUFBQWNBQUFEREFBQUJLd0FBQW93QUFBUUNBQUFBQVFBRUFBa0FBQUFGYm1GdFpYTUFBQUFRQUFBQUFnQUVBQWtBQUFBRmMzUjFaSGtBQkFBSkFBQUFBVzRBQUFRQ0FBQUFBUUFFQUFrQUFBQUpjbTkzTG01aGJXVnpBQUFBRFFBQUFBS0FBQUFBLy8vLy9BQUFCQUlBQUFBQkFBUUFDUUFBQUFWamJHRnpjd0FBQUJBQUFBQUJBQVFBQ1FBQUFBcGtZWFJoTG1aeVlXMWxBQUFBL2dBQUJBSUFBQUFCQUFRQUNRQUFBQWR2Y0hScGIyNXpBQUFDRXdBQUFBVUFBQUFRQUFBQUFRQUVBQWtBQUFBQmNnQUFBQkFBQUFBQkFBUUFDUUFBQUE5MWJtNWhiV1ZrTFdOb2RXNXJMVFFBQUFBS0FBQUFBUUFBQUFBQUFBQU5BQUFBQVFBQUFBUUFBQUFOQUFBQUFRQUFBQUlBQUFRQ0FBQUMvd0FBQUJBQUFBQUZBQVFBQ1FBQUFBWmxibWRwYm1VQUJBQUpBQUFBQld4aFltVnNBQVFBQ1FBQUFBNXliM2R1WVcxbGN5NXdjbWx1ZEFBRUFBa0FBQUFLY205M2N5NTBiM1JoYkFBRUFBa0FBQUFLWTI5c2N5NTBiM1JoYkFBQUFQNEFBQUQrIn0= -->
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":["study"],"name":[1],"type":["chr"],"align":["left"]},{"label":["n"],"name":[2],"type":["int"],"align":["right"]}],"data":[{"1":"BHRC","2":"7"},{"1":"CCNP","2":"195"},{"1":"ECAS","2":"299"},{"1":"HBN","2":"98"},{"1":"HCP-D","2":"652"}],"options":{"columns":{"min":{},"max":[10],"total":[2]},"rows":{"min":[10],"max":[10],"total":[5]},"pages":{}}}
+{"columns":[{"label":["study"],"name":[1],"type":["chr"],"align":["left"]},{"label":["n"],"name":[2],"type":["int"],"align":["right"]}],"data":[{"1":"BHRC","2":"7"},{"1":"CCNP","2":"195"},{"1":"ECAS","2":"299"},{"1":"HCP-D","2":"652"}],"options":{"columns":{"min":{},"max":[10],"total":[2]},"rows":{"min":[10],"max":[10],"total":[4]},"pages":{}}}
   </script>
 </div>
 <!-- rnb-frame-end -->

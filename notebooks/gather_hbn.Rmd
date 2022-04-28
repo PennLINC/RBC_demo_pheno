@@ -35,6 +35,12 @@ hbn_raw <- read_csv(here(data_path, "HBNdata_2020_12_03.csv")) %>%
 hbn_lei <- read_csv(here(data_path, "hbn_demo_from_lei.csv")) %>%
   mutate(participant_id = subject) %>%
   rename(sex_old = sex)
+
+hbn_joelle <- read_csv(here(data_path, "data-2022-03-29T21_15_06.086Z.csv")) %>%
+  slice(-1) %>%
+  rename("participant_id" = Identifiers) %>%
+  mutate(participant_id = str_remove(participant_id, ",assessment")) %>%
+  mutate(participant_id = str_c("sub-", participant_id))
 ```
 
 ```{r}
@@ -43,13 +49,21 @@ hbn_raw %>%
   select(-participant_id)
 ```
 
+Try join:
+
+```{r}
+hbn_ <- list(hbn_raw, hbn_lei, hbn_joelle) %>%
+  reduce(., dplyr::full_join, by = 'participant_id')
+```
+
+
 Let's grab the first relevant variables
 
 # Age
 
 ```{r}
-hbn_ <- hbn_raw %>%
-  mutate(age = as.numeric(`Basic_Demos,Age`))
+hbn_ <- hbn_ %>%
+  mutate(age = as.numeric(`Basic_Demos,Age.x`))
 ```
 
 ```{r}
@@ -61,11 +75,25 @@ qplot(hbn_$age)
 ```{r}
 sex_levels <- c("Male", "Female", "Other")
 hbn_ <- hbn_ %>%
-  mutate(sex = case_when(
-    `Basic_Demos,Sex` == "0"    ~ "Male",
-    `Basic_Demos,Sex` == "1"    ~ "Female",
+  mutate(sex.x = case_when(
+    `Basic_Demos,Sex.x` == "0"    ~ "Male",
+    `Basic_Demos,Sex.x` == "1"    ~ "Female",
     TRUE                        ~ "Other"
   ) %>% factor(levels = sex_levels))
+
+hbn_ <- hbn_ %>%
+  mutate(sex.y = case_when(
+    `Basic_Demos,Sex.y` == "0"    ~ "Male",
+    `Basic_Demos,Sex.y` == "1"    ~ "Female",
+    TRUE                        ~ "Other"
+  ) %>% factor(levels = sex_levels))
+
+conflict_sex <- hbn_ %>% filter(sex.x != sex.y)
+
+stopifnot(nrow(conflict_sex) == 0)
+
+
+hbn_ <- hbn_ %>% mutate(sex = sex.x)
 ```
 
 ```{r}
@@ -76,7 +104,11 @@ qplot(hbn_$sex)
 
 ```{r}
 hbn_ %>%
-  select(`PreInt_Demos_Fam,Child_Race`) %>%
+  select(`PreInt_Demos_Fam,Child_Race.x`) %>%
+  table()
+
+hbn_ %>%
+  select(`PreInt_Demos_Fam,Child_Race.y`) %>%
   table()
 ```
 
@@ -85,18 +117,18 @@ Only want: black, white, asian, mixed, other, unknown, hispanic
 ```{r}
 hbn_ <- hbn_ %>%
   mutate(race_old = case_when(
-    `PreInt_Demos_Fam,Child_Race` == "0"  ~ "White/Caucasian",
-    `PreInt_Demos_Fam,Child_Race` == "1"  ~ "Black/African American",
-    `PreInt_Demos_Fam,Child_Race` == "2"  ~ "Hispanic",
-    `PreInt_Demos_Fam,Child_Race` == "3"  ~ "Asian",
-    `PreInt_Demos_Fam,Child_Race` == "4"  ~ "Indian",
-    `PreInt_Demos_Fam,Child_Race` == "5"  ~ "Native American Indian",
-    `PreInt_Demos_Fam,Child_Race` == "6"  ~ "American Indian/Alaskan Native",
-    `PreInt_Demos_Fam,Child_Race` == "7"  ~ "Native Hawaiian/Other Pacific Islander",
-    `PreInt_Demos_Fam,Child_Race` == "8"  ~ "Two or more races",
-    `PreInt_Demos_Fam,Child_Race` == "9"  ~ "Other race",
-    `PreInt_Demos_Fam,Child_Race` == "10" ~ "Unknown",
-    `PreInt_Demos_Fam,Child_Race` == "11" ~ "Other",
+    `PreInt_Demos_Fam,Child_Race.x` == "0"  ~ "White/Caucasian",
+    `PreInt_Demos_Fam,Child_Race.x` == "1"  ~ "Black/African American",
+    `PreInt_Demos_Fam,Child_Race.x` == "2"  ~ "Hispanic",
+    `PreInt_Demos_Fam,Child_Race.x` == "3"  ~ "Asian",
+    `PreInt_Demos_Fam,Child_Race.x` == "4"  ~ "Indian",
+    `PreInt_Demos_Fam,Child_Race.x` == "5"  ~ "Native American Indian",
+    `PreInt_Demos_Fam,Child_Race.x` == "6"  ~ "American Indian/Alaskan Native",
+    `PreInt_Demos_Fam,Child_Race.x` == "7"  ~ "Native Hawaiian/Other Pacific Islander",
+    `PreInt_Demos_Fam,Child_Race.x` == "8"  ~ "Two or more races",
+    `PreInt_Demos_Fam,Child_Race.x` == "9"  ~ "Other race",
+    `PreInt_Demos_Fam,Child_Race.x` == "10" ~ "Unknown",
+    `PreInt_Demos_Fam,Child_Race.x` == "11" ~ "Other",
   ) %>% factor()
 )
 #0= White/Caucasian
@@ -166,7 +198,16 @@ We have the following input for education:
 
 ```{r}
 hbn_ <- hbn_ %>%
-  mutate(education_years=as.numeric(`PreInt_EduHx,yrs_school`))
+  mutate(education_years.x=as.numeric(`PreInt_EduHx,yrs_school.x`))
+hbn_ <- hbn_ %>%
+  mutate(education_years.y=as.numeric(`PreInt_EduHx,yrs_school.y`))
+
+conflict_edu <- hbn_ %>% filter(education_years.x != education_years.y)
+
+stopifnot(nrow(conflict_edu) == 0)
+
+
+hbn_ <- hbn_ %>% mutate(education_years = education_years.x)
 ```
 
 ```{r}
@@ -186,7 +227,6 @@ hbn_ %>%
 
 ```{r}
 hbn_ %>%
-  left_join(hbn_lei) %>%
   mutate(education_f = Father_Edu, education_m = Mother_Edu) -> hbn_
 
 hbn_ %>%
@@ -243,7 +283,7 @@ hbn_ %>%
 hbn_final <- hbn_ %>%
   mutate(wave = "1",
          study = "HBN" %>% factor(),
-         Site = `Basic_Demos,Study_Site` %>% factor()
+         Site = `Basic_Demos,Study_Site.x` %>% factor()
   ) %>%
   mutate(study_site = case_when(Site=="1" ~ "HBN-1",
                                 Site=="2" ~ "HBN-2",
