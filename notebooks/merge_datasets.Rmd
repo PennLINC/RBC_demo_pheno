@@ -12,10 +12,27 @@ library(here)
 ```
 
 ```{r}
-df <- list.files(here("outputs"), pattern = ".rds", full.names = TRUE) %>%
+df_all <- list.files(here("outputs"), pattern = ".rds", full.names = TRUE) %>%
   map_df(readRDS) %>%
   mutate(across(c(study, study_site, wave, education), ~as.factor(.)))
 ```
+
+We must also filter by the participants we have in our final production dataset:
+
+```{r}
+datasets <- list.dirs("/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets", recursive = FALSE)
+subjects <- map(datasets, list.dirs, recursive=FALSE) %>%
+  unlist()
+subjects <- c(subjects, list.dirs("/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets/ECAS/BIDS", recursive = FALSE)) %>%
+  str_subset("sub-") %>%
+  str_extract("sub-.+")
+```
+
+```{r}
+df <- df_all %>%
+  filter(participant_id %in% subjects)
+```
+
 
 ```{r}
 df %>%
@@ -30,4 +47,3 @@ summary(df)
 df %>%
   write_delim(here("outputs", "participants.tsv"), delim = "\t")
 ```
-

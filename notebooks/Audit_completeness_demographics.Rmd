@@ -1,0 +1,56 @@
+---
+title: "Demographics vs Imaging Audit"
+output: html_notebook
+---
+
+## What are we missing?
+
+```{r}
+library(tidyverse)
+library(here)
+```
+
+Grab all the demographics:
+
+```{r}
+#all the demographic data we've processed
+demographics_all <- list.files(here("outputs"), pattern = ".rds", full.names = TRUE) %>%
+  map_df(readRDS) %>%
+  mutate(across(c(study, study_site, wave, education), ~as.factor(.)))
+```
+
+Filter by the participants we have in our final production dataset:
+
+```{r}
+# all the imaging datasets we have
+get_subjects <- function(x){
+  
+  list.dirs(x, recursive=FALSE, full.names = FALSE) %>%
+    tibble(source=x, participant_id=.) %>%
+    filter(str_detect(participant_id, "sub-")) %>%
+    return()
+}
+
+datasets <- list.dirs("/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets", recursive = FALSE)
+imaging_all <- map_df(datasets, get_subjects) %>%
+  mutate(study = str_extract(source, "(?<=bidsdatasets\\/).+"))
+
+imaging_all <- get_subjects("/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets/ECAS/BIDS") %>%
+  mutate(study = str_extract(source, "(?<=bidsdatasets\\/).+(?=\\/)")) %>%
+  bind_rows(imaging_all) %>%
+  mutate(study = ifelse(study == "HRC", "BHRC", study))
+  
+```
+
+Imaging but no demographics at all:
+
+```{r}
+missing_demo <- imaging_all %>%
+  left_join(demographics_all) %>%
+  filter(if_all(!c(source, participant_id, study), is.na))
+
+missing_demo %>%
+  group_by(study) %>%
+  summarise(n=n())
+```
+
