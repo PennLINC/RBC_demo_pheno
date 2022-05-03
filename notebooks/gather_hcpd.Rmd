@@ -26,13 +26,27 @@ data_path <- here("data")
 # Read in
 
 ```{r, cache=TRUE}
-hcpd_raw <- read_csv(here(data_path, "hcpd_demographics.csv"))
+colnames_ <- read_tsv(here(data_path, "hcpd_socdem01.tsv"),n_max = 0) %>%
+  names()
+hcpd_raw <- read_tsv(here(data_path, "hcpd_socdem01.tsv"), skip = 2, col_names = colnames_)
+
+colnames_ <- read_tsv(here(data_path, "hcpd_edinburgh_hand01.tsv"),n_max = 0) %>%
+  names()
+hcpd_hand <- read_tsv(here(data_path, "hcpd_edinburgh_hand01.tsv"), skip = 2, col_names = colnames_)
+
+hcpd_old <- read_csv(here(data_path, "hcpd_demographics.csv"))
+
+hcpd_raw <- hcpd_raw %>%
+  left_join(hcpd_hand, by = c("src_subject_id")) %>%
+  left_join(hcpd_old, by = c("src_subject_id"))
+
+
 ```
 
-```{r}
+```{r, include=FALSE}
 hcpd_raw %>%
   sample_n(30) %>%
-  select(-src_subject_id, -src_subject_id_caregiver, -src_subject_id_self, -subjectkey)
+  select(-c(collection_id:src_subject_id))
 ```
 
 Let's grab the first relevant variables
@@ -68,7 +82,7 @@ qplot(hcpd_$sex)
 
 ```{r}
 hcpd_ %>%
-  select(race) %>%
+  select(race.x) %>%
   table()
 ```
 
@@ -77,7 +91,7 @@ Only want: black, white, asian, mixed, other, unknown, hispanic
 ```{r}
 race_levels <- c("Black", "White", "Asian", "Mixed", "Hispanic", "Other", "Unknown")
 hcpd_ <- hcpd_ %>%
-  mutate(race_old = race)
+  mutate(race_old = race.x)
   
 hcpd_ <- hcpd_ %>%
   mutate(
@@ -124,7 +138,7 @@ hcpd_ %>%
 We have the following input for education:
 
 ```{r}
-hcpd_$bkgrnd_education %>%
+hcpd_$bkgrnd_education.x %>%
   table()
 ```
 
@@ -137,13 +151,14 @@ education_levels <- c("Kindergarten", str_c(scales::ordinal(1:12), " Grade"), "H
 hcpd_ <- hcpd_ %>%
   mutate(
     education = case_when(
-      str_detect(bkgrnd_education, "NO DIPLOMA")  ~ "12th Grade",
-      str_detect(bkgrnd_education, "GRADE")       ~ str_to_title(bkgrnd_education),
-      str_detect(bkgrnd_education, "ASSOCIATE")   ~ "Associate's Degree",
-      str_detect(bkgrnd_education, "BACHELOR")    ~ "Bachelor's Degree",
-      str_detect(bkgrnd_education, "HIGH SCHOOL GRADUATE") ~ "High School Diploma",
-      str_detect(bkgrnd_education, "KINDER")      ~ str_to_title(bkgrnd_education),
-      str_detect(bkgrnd_education, "SOME COLLEGE")~ "Some College"
+      str_detect(bkgrnd_education.x, "NO DIPLOMA")  ~ "12th Grade",
+      str_detect(bkgrnd_education.x, "GRADE")       ~ str_to_lower(bkgrnd_education.x) %>%
+        str_replace("g", "G"),
+      str_detect(bkgrnd_education.x, "ASSOCIATE")   ~ "Associate's Degree",
+      str_detect(bkgrnd_education.x, "BACHELOR")    ~ "Bachelor's Degree",
+      str_detect(bkgrnd_education.x, "HIGH SCHOOL GRADUATE") ~ "High School Diploma",
+      str_detect(bkgrnd_education.x, "KINDER")      ~ str_to_title(bkgrnd_education.x),
+      str_detect(bkgrnd_education.x, "SOME COLLEGE")~ "Some College"
     ),
     education = str_replace(education, ";", "") %>% factor(levels = education_levels)
   )
@@ -158,7 +173,7 @@ hcpd_ %>%
 
 ```{r}
 hcpd_ %>%
-  ggsankey::make_long(bkgrnd_education, education) %>%
+  ggsankey::make_long(bkgrnd_education.x, education) %>%
   ggplot(aes(x = x,
              next_x = next_x,
              node = node,
@@ -182,10 +197,10 @@ hcpd_ %>%
 We'll also encode this one with categories:
 
 ```{r}
-hcpd_$father_edu_cat %>%
+hcpd_$father_edu_cat.x %>%
   table()
 
-hcpd_$mother_edu_cat %>%
+hcpd_$mother_edu_cat.x %>%
   table()
 ```
 
@@ -198,45 +213,45 @@ hcpd_ %>%
   mutate(
     # encode the old dictionary
     father_edu_cat_vals = case_when(
-      father_edu_cat == 0                        ~ "Never attended or Kindergarten only",
-      father_edu_cat >= 1 & father_edu_cat < 12  ~ str_c("Grade ", father_edu_cat),
-      father_edu_cat == 12                       ~ "High school No diploma",
-      father_edu_cat == 13                       ~ "GED or equivalent",
-      father_edu_cat == 14                       ~ "High school graduate",
-      father_edu_cat == 15                       ~ "Completed 12 years of school (but unable to determine if code 12, 13, or 14)",
-      father_edu_cat == 16                       ~ "Some college, no degree",
-      father_edu_cat == 17                       ~ "Associate degree: occupational/technical/vocational program",
-      father_edu_cat == 18                       ~ "Associate degree: academic program (includes non-US post high school/pre college levels)",
-      father_edu_cat == 19                       ~ "Associate degree (but unable to determine if code 12, 13, or 14)",
-      father_edu_cat == 20                       ~ "Bachelor degree (e.g., BA, AB, BS, BBA)",
-      father_edu_cat == 21                       ~ "Completed 16 years of school (but unable to determine if code 16-20)",
-      father_edu_cat == 22                       ~ "Master's degree (e.g., MA, MS, MEng, MEd, MBA)",
-      father_edu_cat == 23                       ~ "Professional school degree (e.g., MD, DDS, DVM, JD)",
-      father_edu_cat == 24                       ~ "Doctoral degree (e.g., PhD, EdD)",
-      father_edu_cat == 25                       ~ "Post Master degree (but unable to determine if code 20 or 21)",
-      father_edu_cat == 26                       ~ "Unknown/Missing",
-      father_edu_cat == 98                       ~ "Refused to answer"
+      father_edu_cat.x == 0                        ~ "Never attended or Kindergarten only",
+      father_edu_cat.x >= 1 & father_edu_cat.x < 12  ~ str_c("Grade ", father_edu_cat.x),
+      father_edu_cat.x == 12                       ~ "High school No diploma",
+      father_edu_cat.x == 13                       ~ "GED or equivalent",
+      father_edu_cat.x == 14                       ~ "High school graduate",
+      father_edu_cat.x == 15                       ~ "Completed 12 years of school (but unable to determine if code 12, 13, or 14)",
+      father_edu_cat.x == 16                       ~ "Some college, no degree",
+      father_edu_cat.x == 17                       ~ "Associate degree: occupational/technical/vocational program",
+      father_edu_cat.x == 18                       ~ "Associate degree: academic program (includes non-US post high school/pre college levels)",
+      father_edu_cat.x == 19                       ~ "Associate degree (but unable to determine if code 12, 13, or 14)",
+      father_edu_cat.x == 20                       ~ "Bachelor degree (e.g., BA, AB, BS, BBA)",
+      father_edu_cat.x == 21                       ~ "Completed 16 years of school (but unable to determine if code 16-20)",
+      father_edu_cat.x == 22                       ~ "Master's degree (e.g., MA, MS, MEng, MEd, MBA)",
+      father_edu_cat.x == 23                       ~ "Professional school degree (e.g., MD, DDS, DVM, JD)",
+      father_edu_cat.x == 24                       ~ "Doctoral degree (e.g., PhD, EdD)",
+      father_edu_cat.x == 25                       ~ "Post Master degree (but unable to determine if code 20 or 21)",
+      father_edu_cat.x == 26                       ~ "Unknown/Missing",
+      father_edu_cat.x == 98                       ~ "Refused to answer"
     ),
   # encode the old dictionary
     mother_edu_cat_vals = case_when(
-      mother_edu_cat == 0                        ~ "Never attended or Kindergarten only",
-      mother_edu_cat >= 1 & mother_edu_cat < 12  ~ str_c("Grade ", mother_edu_cat),
-      mother_edu_cat == 12                       ~ "High school No diploma",
-      mother_edu_cat == 13                       ~ "GED or equivalent",
-      mother_edu_cat == 14                       ~ "High school graduate",
-      mother_edu_cat == 15                       ~ "Completed 12 years of school (but unable to determine if code 12, 13, or 14)",
-      mother_edu_cat == 16                       ~ "Some college, no degree",
-      mother_edu_cat == 17                       ~ "Associate degree: occupational/technical/vocational program",
-      mother_edu_cat == 18                       ~ "Associate degree: academic program (includes non-US post high school/pre college levels)",
-      mother_edu_cat == 19                       ~ "Associate degree (but unable to determine if code 12, 13, or 14)",
-      mother_edu_cat == 20                       ~ "Bachelor degree (e.g., BA, AB, BS, BBA)",
-      mother_edu_cat == 21                       ~ "Completed 16 years of school (but unable to determine if code 16-20)",
-      mother_edu_cat == 22                       ~ "Master's degree (e.g., MA, MS, MEng, MEd, MBA)",
-      mother_edu_cat == 23                       ~ "Professional school degree (e.g., MD, DDS, DVM, JD)",
-      mother_edu_cat == 24                       ~ "Doctoral degree (e.g., PhD, EdD)",
-      mother_edu_cat == 25                       ~ "Post Master degree (but unable to determine if code 20 or 21)",
-      mother_edu_cat == 26                       ~ "Unknown/Missing",
-      mother_edu_cat == 98                       ~ "Refused to answer"
+      mother_edu_cat.x == 0                        ~ "Never attended or Kindergarten only",
+      mother_edu_cat.x >= 1 & mother_edu_cat.x < 12  ~ str_c("Grade ", mother_edu_cat.x),
+      mother_edu_cat.x == 12                       ~ "High school No diploma",
+      mother_edu_cat.x == 13                       ~ "GED or equivalent",
+      mother_edu_cat.x == 14                       ~ "High school graduate",
+      mother_edu_cat.x == 15                       ~ "Completed 12 years of school (but unable to determine if code 12, 13, or 14)",
+      mother_edu_cat.x == 16                       ~ "Some college, no degree",
+      mother_edu_cat.x == 17                       ~ "Associate degree: occupational/technical/vocational program",
+      mother_edu_cat.x == 18                       ~ "Associate degree: academic program (includes non-US post high school/pre college levels)",
+      mother_edu_cat.x == 19                       ~ "Associate degree (but unable to determine if code 12, 13, or 14)",
+      mother_edu_cat.x == 20                       ~ "Bachelor degree (e.g., BA, AB, BS, BBA)",
+      mother_edu_cat.x == 21                       ~ "Completed 16 years of school (but unable to determine if code 16-20)",
+      mother_edu_cat.x == 22                       ~ "Master's degree (e.g., MA, MS, MEng, MEd, MBA)",
+      mother_edu_cat.x == 23                       ~ "Professional school degree (e.g., MD, DDS, DVM, JD)",
+      mother_edu_cat.x == 24                       ~ "Doctoral degree (e.g., PhD, EdD)",
+      mother_edu_cat.x == 25                       ~ "Post Master degree (but unable to determine if code 20 or 21)",
+      mother_edu_cat.x == 26                       ~ "Unknown/Missing",
+      mother_edu_cat.x == 98                       ~ "Refused to answer"
     )
   ) -> hcpd_
 
@@ -340,25 +355,21 @@ From the data dictionary:
 > hcp_handedness_score=sum(iihandwr,iihandth,iihandsc,iihandto,iihandkn,iihandsp,iihandbr,iihandma,iihandbo,iihandfk), where values for elements are coded left=-10, spl/usually left=-5, np=0, spr/usually right=5, and right=10. Missing elements are assigned the median of subject's other summands
 
 ```{r}
-hcpd_$hcp_handedness_score %>%
+hcpd_$hcp_handedness_score.x %>%
   qplot()
 ```
 
-Most folks are right handed, what to do about folks who scored a zero?
-
-```{r}
-hcpd_ %>%
-  filter(hcp_handedness_score == 0)
-```
-
-Use ambi...
+Using [this scoring guideline](https://www.physio-pedia.com/Edinburgh_Handedness_Inventory_(EHI)):
 
 ```{r}
 hcpd_ <- hcpd_ %>%
-  mutate(handedness = case_when(hcp_handedness_score > 0  ~ "Right",
-                                hcp_handedness_score < 0  ~ "Left",
-                                TRUE                      ~ "Ambidextrous") %>% factor())
+  mutate(handedness = case_when(hcp_handedness_score.x < -40  ~ "Left",
+                                (hcp_handedness_score.x >= -40 & hcp_handedness_score.x < 40)  ~ "Ambidextrous",
+                                hcp_handedness_score.x >= 40  ~ "Right") %>% factor()
+         )
+
 ```
+
 
 ```{r}
 hcpd_$handedness %>%
@@ -388,7 +399,7 @@ hcpd_ %>%
 ```{r}
 hcpd_final <- hcpd_ %>%
   mutate(wave = visit %>% as.character(),
-         participant_id = str_c("sub-", src_subject_id),
+         participant_id = src_subject_id %>% str_remove("HCD") %>% str_c("sub-", .),
          study = "HCP-D" %>% factor(),
          study_site = "HCP-D" %>% factor()
   ) %>%
