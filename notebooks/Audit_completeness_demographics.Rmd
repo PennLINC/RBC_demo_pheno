@@ -38,7 +38,11 @@ imaging_all <- map_df(datasets, get_subjects) %>%
 imaging_all <- get_subjects("/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets/ECAS/BIDS") %>%
   mutate(study = str_extract(source, "(?<=bidsdatasets\\/).+(?=\\/)")) %>%
   bind_rows(imaging_all) %>%
-  mutate(study = ifelse(study == "HRC", "BHRC", study))
+  mutate(study = case_when(
+    study == "HRC"   ~ "BHRC",
+    study == "ECAS"  ~ "PACCT",
+    TRUE             ~ study
+  ))
   
 ```
 

@@ -47,6 +47,7 @@ ecas_ %>%
 
 ```{r}
 message("No age provided")
+ecas_$age <- NA
 ```
 
 ```{r, eval=FALSE}
@@ -56,6 +57,7 @@ qplot(ecas_$age)
 # Sex
 
 ```{r}
+message("no data dictionary for male vs. female given")
 sex_levels <- c("Male", "Female", "Other")
 ecas_ <- ecas_ %>%
   mutate(sex = case_when(
@@ -98,31 +100,15 @@ Only want: black, white, asian, mixed, other, unknown, hispanic
 ```{r}
 ecas_ <- ecas_ %>%
   mutate(race_old = case_when(
-    `PreInt_Demos_Fam,Child_Race.x` == "0"  ~ "White/Caucasian",
-    `PreInt_Demos_Fam,Child_Race.x` == "1"  ~ "Black/African American",
-    `PreInt_Demos_Fam,Child_Race.x` == "2"  ~ "Hispanic",
-    `PreInt_Demos_Fam,Child_Race.x` == "3"  ~ "Asian",
-    `PreInt_Demos_Fam,Child_Race.x` == "4"  ~ "Indian",
-    `PreInt_Demos_Fam,Child_Race.x` == "5"  ~ "Native American Indian",
-    `PreInt_Demos_Fam,Child_Race.x` == "6"  ~ "American Indian/Alaskan Native",
-    `PreInt_Demos_Fam,Child_Race.x` == "7"  ~ "Native Hawaiian/Other Pacific Islander",
-    `PreInt_Demos_Fam,Child_Race.x` == "8"  ~ "Two or more races",
-    `PreInt_Demos_Fam,Child_Race.x` == "9"  ~ "Other race",
-    `PreInt_Demos_Fam,Child_Race.x` == "10" ~ "Unknown",
-    `PreInt_Demos_Fam,Child_Race.x` == "11" ~ "Other",
+    `RACE` == 1  ~ "American Indian / Alaskan Native",
+    `RACE` == 2  ~ "Asian",
+    `RACE` == 3  ~ "Native Hawaiian/Other Pacific Islander",
+    `RACE` == 4  ~ "Black",
+    `RACE` == 5  ~ "White",
+    `RACE` == 6  ~ "More than 1 race",
+    `RACE` == 7  ~ "Unknown/not reported"
   ) %>% factor()
 )
-#0= White/Caucasian
-#1= Black/African American
-#8= Two or more races
-#5= Native American Indian
-#6= American Indian/Alaskan Native
-#7= Native Hawaiian/Other Pacific Islander
-#3= Asian
-#9= Other race
-#2= Hispanic
-#4= Indian
-#10= Unknown
 
 ```
 
@@ -132,17 +118,13 @@ race_levels <- c("Black", "White", "Asian", "Mixed", "Hispanic", "Other", "Unkno
 ecas_ <- ecas_ %>%
   mutate(
     race = case_when(
-    race_old == "White/Caucasian"                   ~ "White",
-    race_old == "Black/African American"            ~ "Black",
-    race_old == "Hispanic"                          ~ "Hispanic",
-    race_old == "Asian"                             ~ "Asian",
-    race_old == "Indian"                            ~ "Asian",
-    race_old == "Native American Indian"            ~ "Other",
-    race_old == "American Indian/Alaskan Native"    ~ "Other",
-    race_old == "American Indian/Alaskan Native"    ~ "Other",
-    race_old == "Two or more races"                 ~ "Mixed",
-    str_detect(race_old, "Other")                   ~ "Other",
-    race_old == "Unknown"                           ~ "Unknown"
+    race_old == "American Indian / Alaskan Native"       ~ "Other",
+    race_old == "Asian"                                  ~ "Asian",
+    race_old == "Native Hawaiian/Other Pacific Islander" ~ "Hispanic",
+    race_old == "Black"                                  ~ "Black",
+    race_old == "White"                                  ~ "White",
+    race_old == "More than 1 race"                       ~ "Mixed",
+    race_old == "Unknown/not reported"                   ~ "Unknown"
   ) %>% factor(levels = race_levels))
 ```
 
@@ -178,27 +160,32 @@ ecas_ %>%
 We have the following input for education:
 
 ```{r}
+table(ecas_$SCHOOLGRADE)
+```
+
+Assuming 0 and 0.5 are kindergarten:
+
+```{r}
+education_levels <- c("Kindergarten", str_c(scales::ordinal(1:12), " Grade"))
+
 ecas_ <- ecas_ %>%
-  mutate(education_years.x=as.numeric(`PreInt_EduHx,yrs_school.x`))
-ecas_ <- ecas_ %>%
-  mutate(education_years.y=as.numeric(`PreInt_EduHx,yrs_school.y`))
-
-conflict_edu <- ecas_ %>% filter(education_years.x != education_years.y)
-
-stopifnot(nrow(conflict_edu) == 0)
-
-
-ecas_ <- ecas_ %>% mutate(education_years = education_years.x)
+  mutate(
+    education = case_when(
+      SCHOOLGRADE < 1        ~ "Kindergarten",
+      TRUE                   ~ str_c(scales::ordinal(SCHOOLGRADE), " Grade")
+    ),
+    education = str_replace(education, ";", "") %>% factor(levels = education_levels)
+  )
 ```
 
 ```{r}
-ecas_$education_years %>%
+ecas_$education %>%
   table()
 ```
 
 ```{r}
 ecas_ %>%
-  ggplot(aes(x=education_years)) +
+  ggplot(aes(x=education)) +
   geom_bar() +
   theme(axis.text.x = element_text(angle=45, hjust = 1))
 ```
@@ -207,37 +194,16 @@ ecas_ %>%
 
 
 ```{r}
-ecas_ %>%
-  mutate(education_f = Father_Edu, education_m = Mother_Edu) -> ecas_
-
-ecas_ %>%
-  select(education_f, education_m) %>%
-  pivot_longer(c(education_f, education_m), names_to = c("parent"), values_to = c("years")) %>%
-  ggplot(aes(x=years)) +
-  geom_bar(aes(fill=parent), position="dodge")
+message("no parent education provided")
+ecas_$education_f <- NA
+ecas_$education_m <- NA
 ```
 
 # Handedness
 
 ```{r}
-ecas_$Handedness %>%
-  qplot()
-```
-
-Most folks are right handed:
-
-```{r}
-ecas_ %>%
-  mutate(handedness = case_when(
-    Handedness == 1 ~ "Right",
-    Handedness == 2 ~ "Left"
-    ) %>% factor()
-  ) -> ecas_
-```
-
-```{r}
-ecas_$handedness %>%
-  qplot()
+message("no handedness provided")
+ecas_$handedness <- NA
 ```
 
 # BMI
@@ -249,7 +215,7 @@ $ \frac{ \text{weight} (lb)} { \text{height} (in)^2 \times 703}$
 ```{r}
 # we get height in inches from vtl007 in the data dictionary
 ecas_ <- ecas_ %>%
-  mutate(bmi = as.numeric(`Physical,BMI`))
+  mutate(bmi = (BMI_WEIGHT / BMI_HEIGHT^2) * 703)
 ```
 
 ```{r}
@@ -263,15 +229,11 @@ ecas_ %>%
 ```{r}
 ecas_final <- ecas_ %>%
   mutate(wave = "1",
-         study = "ecas" %>% factor(),
-         Site = `Basic_Demos,Study_Site.x` %>% factor()
+         study = "PACCT" %>% factor(),
+         Site = "PACCT"
   ) %>%
-  mutate(study_site = case_when(Site=="1" ~ "ecas-1",
-                                Site=="2" ~ "ecas-2",
-                                Site=="3" ~ "ecas-3",
-                                Site=="4" ~ "ecas-4",
-                                Site=="5" ~ "ecas-5")) %>%
-  select(participant_id, study, study_site, wave, age, sex, race, bmi, handedness, education_years, education_years_f=education_f, education_years_m=education_m)
+  mutate(study_site = "PACCT") %>%
+  select(participant_id, study, study_site, wave, age, sex, race, bmi, handedness, education, education_f, education_m)
 ```
 
 ```{r}
