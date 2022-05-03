@@ -1,0 +1,213 @@
+---
+title: "CCNP Demographics"
+output: html_notebook
+---
+
+Below follows the preprocessing of the CCNP demographics data. We ultimately want:
+
+-   Age
+-   Sex
+-   Race
+-   Education
+-   Handedness
+-   Parent's education
+-   BMI
+
+```{r}
+library(tidyverse)
+library(naniar)
+library(ggsankey)
+library(forcats)
+library(here)
+
+data_path <- here("data")
+```
+
+# Read in
+
+```{r, cache=TRUE}
+ccnp_raw <- readxl::read_xlsx(here(data_path, "ccnp_GenderAge.xlsx"))
+```
+
+```{r}
+ccnp_raw %>%
+  sample_n(30)
+```
+
+# Age
+
+```{r}
+ccnp_ <- ccnp_raw %>%
+  mutate(age = Age)
+```
+
+```{r, eval=FALSE}
+qplot(ccnp_$age)
+```
+
+# Sex
+
+```{r}
+sex_levels <- c("Male", "Female", "Other")
+ccnp_ <- ccnp_ %>%
+  mutate(sex = case_when(
+    Gender == "M"    ~ "Male",
+    Gender == "F"    ~ "Female",
+    TRUE                        ~ "Other"
+  ) %>% factor(levels = sex_levels))
+
+```
+
+```{r}
+qplot(ccnp_$sex)
+```
+
+
+# Race
+
+```{r}
+message("race note provided")
+ccnp_$race <- NA
+```
+
+
+# Education
+
+```{r}
+message("education not provided")
+ccnp_$education <- NA
+```
+
+# Parent Education
+
+
+```{r}
+message("no parent education provided")
+ccnp_$education_f <- NA
+ccnp_$education_m <- NA
+```
+
+# Handedness
+
+```{r}
+message("no handedness provided")
+ccnp_$handedness <- NA
+```
+
+# BMI
+
+```{r}
+# we get height in inches from vtl007 in the data dictionary
+message("bmi not provided")
+ccnp_$bmi <- NA
+```
+
+# Summary
+
+```{r}
+ccnp_final <- ccnp_ %>%
+  mutate(participant_id = str_c("sub-", CCNP_Anonymous_ID)) %>%
+  mutate(wave = "1",
+         study = "Colornest" %>% factor(),
+         Site = "Colornest"
+  ) %>%
+  mutate(study_site = "Colornest") %>%
+  select(participant_id, study, study_site, wave, age, sex, race, bmi, handedness, education, education_f, education_m)
+```
+
+```{r}
+gg_miss_var(ccnp_final, show_pct = TRUE)
+```
+# Outputs
+
+We write the output to RDS as well as the data dictionary.
+
+```{r}
+ccnp_final %>%
+  write_rds(here("outputs", "ccnp_data.rds"))
+```
+
+```{r}
+age <- list(
+  LongName = "ParticipantAge",
+  Description = "Participant age in years at the time of scan/intake. If original data is collected in months, the final value is divided by 12.",
+  Units = "Years"
+)
+
+race <- list(
+  LongName = "ParticipantRace",
+  Description = "Participant's race.",
+  Levels = levels(ccnp_final$race)
+)
+
+sex <- list(
+  LongName = "ParticipantSex",
+  Description = "Participant's sex.",
+  Levels = levels(ccnp_final$sex)
+)
+
+bmi <- list(
+  LongName = "ParticipantBMI",
+  Description = "Participant's Body Mass Index. ",
+  TermURL = "https://www.cdc.gov/nccdphp/dnpao/growthcharts/training/bmiage/page5_2.html",
+  Units = "lbs/inches^2; BMI is normally reported without units."
+)
+
+handedness <- list(
+  LongName = "ParticipantHandedness",
+  Description = "Participant handedness. Either self-reported, or result of binarizing the Edinburgh Handedness Scale. Participants whose Edinburgh Handedness Scale value is 0 are reported as Ambidextrous",
+  Levels = levels(ccnp_final$handedness),
+  TermURL = "https://en.wikipedia.org/wiki/Edinburgh_Handedness_Inventory"
+)
+
+education_years <- list(
+  LongName = "ParticipantEducation",
+  Description = "Participant education in years at time of scan/intake."
+)
+
+education_f <- list(
+  LongName = "FatherEducation",
+  Description = "Father's education level at time of scan/intake.",
+  Levels = levels(ccnp_final$education_f)
+)
+
+education_m <- list(
+  LongName = "MotherEducation",
+  Description = "Mother's education level at time of scan/intake.",
+  Levels = levels(ccnp_final$education_m)
+)
+
+wave <- list(
+  LongName = "ParticipantWave",
+  Description = "Participant's recruitment wave.",
+  Levels = levels(ccnp_final$wave)
+)
+
+study_site <- list(
+  LongName = "ParticipantStudySite",
+  Description = "Participant's study recruitment site.",
+  Levels = levels(ccnp_final$study_site)
+)
+
+study <- list(
+  LongName = "ParticipantStudy",
+  Description = "Participant's study.",
+  Levels = levels(ccnp_final$study)
+)
+
+list(age=age, 
+     race=race, 
+     sex=sex, 
+     bmi=bmi, 
+     handedness=handedness, 
+     education_years=education_years, 
+     education_f=education_f, 
+     education_m=education_m, 
+     wave=wave, 
+     study_site=study_site, 
+     study=study) %>%
+  #jsonlite::toJSON(auto_unbox = TRUE) %>%
+  #jsonlite::prettify() %>%
+  jsonlite::write_json(here("outputs", "ccnp_dictionary.json"), auto_unbox=TRUE, pretty=TRUE)
+```
+
