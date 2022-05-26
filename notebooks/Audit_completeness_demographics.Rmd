@@ -41,6 +41,7 @@ imaging_all <- get_subjects("/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets/ECAS/B
   mutate(study = case_when(
     study == "HRC"   ~ "BHRC",
     study == "ECAS"  ~ "PACCT",
+    study == "CCNP"  ~ "Colornest",
     TRUE             ~ study
   ))
   
@@ -49,6 +50,9 @@ imaging_all <- get_subjects("/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets/ECAS/B
 Imaging but no demographics at all:
 
 ```{r}
+imaging_w_demo <- imaging_all %>%
+  left_join(demographics_all)
+
 missing_demo <- imaging_all %>%
   left_join(demographics_all) %>%
   filter(if_all(!c(source, participant_id, study), is.na))
@@ -57,4 +61,23 @@ missing_demo %>%
   group_by(study) %>%
   summarise(n=n())
 ```
+
+```{r}
+imaging_w_demo %>%
+ group_by(study) %>%
+ summarise(n=n())
+```
+
+
+```{r}
+imaging_all %>%
+ left_join(demographics_all) %>%
+ select(!c(participant_id, source, study_site, wave)) %>%
+ gg_miss_var(facet=study, show_pct = TRUE)
+```
+
+
+
+
+
 

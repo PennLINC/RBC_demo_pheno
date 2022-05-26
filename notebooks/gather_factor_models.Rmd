@@ -1,0 +1,167 @@
+---
+title: "Project-wide Phenotyping: Factor Models"
+output: html_notebook
+---
+
+This notebook quickly harmonises the phenotypic data for the RBC. It includes specifically a harmonised
+factor score dataset.
+
+```{r}
+library(tidyverse)
+library(here)
+library(naniar)
+```
+
+```{r}
+factors_raw <- readRDS(here("data", "RBC_Psychopathology_factor_scores.Rds")) %>%
+  as_tibble()
+
+get_subjects <- function(x){
+  
+  list.dirs(x, recursive=FALSE, full.names = FALSE) %>%
+    tibble(source=x, participant_id=.) %>%
+    filter(str_detect(participant_id, "sub-")) %>%
+    return()
+}
+
+datasets <- list.dirs("/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets", recursive = FALSE)
+imaging_all <- map_df(datasets, get_subjects) %>%
+  mutate(study = str_extract(source, "(?<=bidsdatasets\\/).+"))
+
+imaging_all <- get_subjects("/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets/ECAS/BIDS") %>%
+  mutate(study = str_extract(source, "(?<=bidsdatasets\\/).+(?=\\/)")) %>%
+  bind_rows(imaging_all) %>%
+  mutate(study = case_when(
+    study == "HRC"   ~ "BHRC",
+    study == "ECAS"  ~ "PACCT",
+    study == "CCNP"  ~ "Colornest",
+    TRUE             ~ study
+  ))
+```
+
+```{r}
+#use masked ECAS subject labels
+ecas_subj_labels <- read_csv("/cbica/projects/RBC/RBC_RAWDATA/bidsdatasets/ECAS/RBC_ECAS_IDs.csv") 
+bhrc_subj_labels <- readRDS(here("data", "BHRC_2020_11_05.rds")) %>%
+  mutate(participant_id = str_c("sub-", subjectid),
+         EID = as.character(ident)) %>%
+  select(EID, participant_id) %>%
+  distinct() %>%
+  drop_na()
+
+factors_raw %>%
+  left_join(bhrc_subj_labels) %>%
+  mutate(participant_id = 
+           case_when(Study == "ECAS"  ~ str_remove(EID, "_V.+") %>%
+                       str_c("sub-", .),
+                     Study == "CCNP"  ~ str_remove(EID, "_wave[0-9]+_") %>%
+                       str_c("sub-", .),
+                     Study == "BHRC"  ~ participant_id,
+                     TRUE ~ str_c("sub-", EID)
+                     )
+         ) %>%
+  left_join(ecas_subj_labels, by = c("participant_id" = "original")) %>%
+  mutate(participant_id = 
+           case_when(
+             Study == "ECAS" ~ hashed,
+             TRUE            ~ participant_id
+           )
+         ) %>%
+  select(participant_id, Study, everything(), -c(old_id, hashed, EID)) -> factor_scores
+```
+
+```{r}
+sample_n(factor_scores, 30)
+```
+
+Quick check for completeness:
+
+```{r}
+factor_scores %>%
+  filter(is.na(participant_id))
+
+```
+
+These 32 are individuals we haven't kept imaging data for (filtered out for image data quality).
+
+Joined with imaging dataset:
+
+```{r}
+imaging_all %>%
+  left_join(factor_scores) %>%
+  select(-Study) %>%
+  group_by(study) %>%
+  summarise(n_missing = sum(is.na(Scale)),
+            perc_missing = (sum(is.na(Scale)) / n() ) * 100)
+```
+
+The NKI numbers are the only ones that are concerning here, but we can see that the source data didn't have many entries to begin with:
+
+```{r}
+factors_raw$Study %>% as.factor() %>% summary()
+```
+
+
+```{r}
+gg_miss_var(factor_scores,show_pct = TRUE)
+```
+
+This is a good representation of the data. Fortunately, the large majority of participants have less than 10% data missing.
+
+# Using the McElroy Scale
+
+We only use the McElroy scale for publication at this time. The code for generating the McElroy
+factor scores is demonstrated on OSF:
+
+> All analysis and data processing code for the CBCL models (11 models reviewed from the literature using their full item set) in the [OSF repo](https://osf.io/uwy5n/) This could be used to explain to the future datas user where these scores come from, how they were modeled, their reliability, etc. If they want to use the CBCL full item set model, of course (i.e., non-harmonized or to compare with the GOASSESS-harmonized scores), the code that we used to test the best item-matching strategy is [here](https://osf.io/wnrp4/) but I think this won’t be of much interest in the final RBC data set.
+
+```{r}
+factor_scores %>%
+  select(participant_id, Study, Scale, matches("McElroy")) %>%
+  sample_n(50)
+```
+
+We'll write these out to a file:
+
+```{r}
+factor_scores %>%
+  select(participant_id, Study, Scale, matches("McElroy")) %>%
+  write_tsv(here("outputs", "mcelroy-pfactor-scores.tsv"))
+```
+
+And a data dictionary similar to 
+
+```
+{
+  "MeasurementToolMetadata": {
+    "Description": "Adult ADHD Clinical Diagnostic Scale V1.2",
+    "TermURL": "https://www.cognitiveatlas.org/task/id/trm_5586ff878155d"
+  },
+  "adhd_b": {
+    "Description": "B. CHILDHOOD ONSET OF ADHD (PRIOR TO AGE 7)",
+    "Levels": {
+      "1": "YES",
+      "2": "NO"
+    }
+  },
+  "adhd_c_dx": {
+    "Description": "As child met A, B, C, D, E and F diagnostic criteria",
+    "Levels": {
+      "1": "YES",
+      "2": "NO"
+    }
+  }
+}
+
+```
+
+```{r}
+MeasurementToolMetadata <- list(
+  "Description" = "McElroy BiFactor Model of Dimensional Psychopathology in Youth",
+  "TermURL" = "https://www.medrxiv.org/content/10.1101/2021.06.27.21259601v1"
+)
+
+list(MeasurementToolMetadata = MeasurementToolMetadata) %>%
+  jsonlite::write_json(here("outputs", "mcelroy-pfactor-scores.json"), auto_unbox=TRUE, pretty=TRUE)
+```
+
